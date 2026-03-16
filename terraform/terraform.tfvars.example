@@ -1,0 +1,18 @@
+# Copy to terraform.tfvars and fill in values. Never commit terraform.tfvars.
+
+# kube_config_path   = "~/.kube/config"
+# namespace          = "default"
+# release_name       = "task-manager"
+
+# Required - from CloudSQL, RDS, or your PostgreSQL instance
+# database_url       = "postgres://user:password@host:5432/taskmanager?sslmode=require"
+
+# Required - use a strong random secret in production
+# jwt_secret         = "your-jwt-secret-min-32-chars"
+
+# image_repository   = "your-registry/task-manager"
+# image_tag          = "latest"
+# ingress_host       = "api.yourdomain.com"
+# replica_count      = 2
+# hpa_min_replicas   = 2
+# hpa_max_replicas   = 10

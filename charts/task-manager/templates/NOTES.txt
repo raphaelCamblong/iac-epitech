@@ -1,0 +1,15 @@
+Task Manager API has been deployed.
+
+1. Get the application URL:
+{{- if .Values.ingress.enabled }}
+{{- range $host := .Values.ingress.hosts }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ $host.host }}
+{{- end }}
+{{- else }}
+  kubectl port-forward svc/{{ include "task-manager.fullname" . }} 8080:{{ .Values.service.port }} -n {{ .Release.Namespace }}
+  Then: http://localhost:8080
+{{- end }}
+
+2. Register: POST /auth/register with {"email":"...","password":"..."}
+3. Login: POST /auth/login to get JWT token
+4. Tasks: Use Authorization: Bearer <token> and correlation_id header

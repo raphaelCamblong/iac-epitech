@@ -1,0 +1,46 @@
+replicaCount: 2
+
+image:
+  repository: task-manager
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations: {}
+  hosts:
+    - host: task-manager.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilization: 70
+
+env:
+  logLevel: info
+  logJSON: "true"
+  port: "8080"
+  rateLimitRPS: "100"
+  rateLimitBurst: "50"
+  jwtExpiryMinutes: "15"
+
+# Secrets - use external secrets or override in production
+existingSecret: ""  # name of existing secret with DATABASE_URL, JWT_SECRET
