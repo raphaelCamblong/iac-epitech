@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  go-test:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: app/go.mod
+
+      - name: Run unit tests
+        run: go test ./...
+
+  docker-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t task-manager:ci ./app
+
+  helm-render:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+
+      - name: Lint chart
+        run: helm lint ./charts/task-manager
+
+      - name: Render chart
+        run: |
+          helm template task-manager ./charts/task-manager \
+            --set existingSecret=task-manager-secrets \
+            --set image.repository=example/task-manager \
+            --set image.tag=ci \
+            --set ingress.hosts[0].host=api.example.com

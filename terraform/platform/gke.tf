@@ -1,0 +1,56 @@
+resource "google_container_cluster" "main" {
+  name     = var.cluster_name
+  location = var.region
+
+  network    = google_compute_network.main.id
+  subnetwork = google_compute_subnetwork.gke.id
+
+  deletion_protection      = false
+  remove_default_node_pool = true
+  initial_node_count       = 1
+  networking_mode          = "VPC_NATIVE"
+
+  release_channel {
+    channel = var.gke_release_channel
+  }
+
+  workload_identity_config {
+    workload_pool = "${var.project_id}.svc.id.goog"
+  }
+
+  ip_allocation_policy {
+    cluster_secondary_range_name  = var.pods_secondary_range_name
+    services_secondary_range_name = var.services_secondary_range_name
+  }
+
+  depends_on = [google_project_service.required["container.googleapis.com"]]
+}
+
+resource "google_container_node_pool" "primary" {
+  name     = "${var.name_prefix}-pool"
+  cluster  = google_container_cluster.main.name
+  location = google_container_cluster.main.location
+
+  node_count = var.node_count
+
+  management {
+    auto_repair  = true
+    auto_upgrade = true
+  }
+
+  node_config {
+    machine_type    = var.node_machine_type
+    disk_size_gb    = var.node_disk_size_gb
+    service_account = google_service_account.gke_nodes.email
+    oauth_scopes    = ["https://www.googleapis.com/auth/cloud-platform"]
+
+    labels = {
+      app = "task-manager"
+    }
+
+    tags = [
+      var.name_prefix,
+      "gke-node",
+    ]
+  }
+}

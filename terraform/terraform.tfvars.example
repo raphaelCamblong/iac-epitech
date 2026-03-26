@@ -1,18 +1,26 @@
 # Copy to terraform.tfvars and fill in values. Never commit terraform.tfvars.
 
-# kube_config_path   = "~/.kube/config"
+# platform_state_path = "platform/terraform.tfstate"
+# project_id          = "your-gcp-project"   # only if platform_state_path is empty
+# region              = "europe-west1"       # only if platform_state_path is empty
+# cluster_name        = "task-manager-gke"   # only if platform_state_path is empty
+# cluster_location    = "europe-west1"       # only if platform_state_path is empty
 # namespace          = "default"
 # release_name       = "task-manager"
 
-# Required - from CloudSQL, RDS, or your PostgreSQL instance
-# database_url       = "postgres://user:password@host:5432/taskmanager?sslmode=require"
+# Required if platform_state_path is empty
+# database_url       = "postgres://user:password@host:5432/taskmanager?sslmode=disable"
 
 # Required - use a strong random secret in production
 # jwt_secret         = "your-jwt-secret-min-32-chars"
 
-# image_repository   = "your-registry/task-manager"
+# Optional if platform_state_path is set
+# artifact_registry_repository = "europe-west1-docker.pkg.dev/your-gcp-project/task-manager"
+# image_name         = "task-manager"
+# image_repository   = "europe-west1-docker.pkg.dev/your-gcp-project/task-manager/task-manager"
 # image_tag          = "latest"
 # ingress_host       = "api.yourdomain.com"
+# ingress_static_ip  = "34.78.x.x"
 # replica_count      = 2
 # hpa_min_replicas   = 2
 # hpa_max_replicas   = 10
