@@ -2,14 +2,18 @@
 .terraform/
 *.tfstate
 *.tfstate.*
-.terraform.lock.hcl
 terraform.tfvars
 *.tfvars
 !terraform.tfvars.example
+*.tfplan
 
 # Go
 app/server
 *.exe
+
+# Python / Locust
+__pycache__/
+.pytest_cache/
 
 # IDE
 .idea/

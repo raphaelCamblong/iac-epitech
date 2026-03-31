@@ -1,7 +1,31 @@
-variable "kube_config_path" {
-  description = "Path to kubeconfig file"
+variable "platform_state_path" {
+  description = "Optional local path to the platform Terraform state file."
   type        = string
-  default     = "~/.kube/config"
+  default     = "platform/terraform.tfstate"
+}
+
+variable "project_id" {
+  description = "GCP project id. Leave empty when using platform_state_path."
+  type        = string
+  default     = ""
+}
+
+variable "region" {
+  description = "GCP region. Leave empty when using platform_state_path."
+  type        = string
+  default     = ""
+}
+
+variable "cluster_name" {
+  description = "GKE cluster name. Leave empty when using platform_state_path."
+  type        = string
+  default     = ""
+}
+
+variable "cluster_location" {
+  description = "GKE cluster location. Leave empty when using platform_state_path."
+  type        = string
+  default     = ""
 }
 
 variable "namespace" {
@@ -17,8 +41,9 @@ variable "release_name" {
 }
 
 variable "database_url" {
-  description = "PostgreSQL connection URL (from CloudSQL, RDS, or external)"
+  description = "PostgreSQL connection URL. Leave empty when using platform_state_path."
   type        = string
+  default     = ""
   sensitive   = true
 }
 
@@ -29,7 +54,19 @@ variable "jwt_secret" {
 }
 
 variable "image_repository" {
-  description = "Container image repository"
+  description = "Full container image repository. If empty, it is built from artifact_registry_repository + image_name."
+  type        = string
+  default     = ""
+}
+
+variable "artifact_registry_repository" {
+  description = "Artifact Registry base path. Leave empty when using platform_state_path."
+  type        = string
+  default     = ""
+}
+
+variable "image_name" {
+  description = "Docker image name appended to artifact_registry_repository when image_repository is empty."
   type        = string
   default     = "task-manager"
 }
@@ -44,6 +81,12 @@ variable "ingress_host" {
   description = "Ingress hostname for the API"
   type        = string
   default     = "task-manager.example.com"
+}
+
+variable "ingress_static_ip" {
+  description = "Optional reserved static IP used by the ingress controller service."
+  type        = string
+  default     = ""
 }
 
 variable "replica_count" {
@@ -62,4 +105,16 @@ variable "hpa_max_replicas" {
   description = "HPA maximum replicas"
   type        = number
   default     = 10
+}
+
+variable "ingress_controller_namespace" {
+  description = "Namespace used by ingress-nginx."
+  type        = string
+  default     = "ingress-nginx"
+}
+
+variable "ingress_nginx_chart_version" {
+  description = "ingress-nginx chart version."
+  type        = string
+  default     = "4.11.2"
 }
