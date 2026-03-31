@@ -19,7 +19,7 @@ resource "helm_release" "ingress_nginx" {
   }
 
   dynamic "set" {
-    for_each = local.ingress_static_ip != "" ? [local.ingress_static_ip] : []
+    for_each = var.ingress_static_ip != "" ? [var.ingress_static_ip] : []
 
     content {
       name  = "controller.service.loadBalancerIP"
@@ -43,7 +43,7 @@ resource "kubernetes_secret" "app_secrets" {
   }
 
   data = {
-    "DATABASE_URL" = local.database_url
+    "DATABASE_URL" = var.database_url
     "JWT_SECRET"   = var.jwt_secret
   }
 
@@ -54,7 +54,7 @@ resource "kubernetes_secret" "app_secrets" {
 
 resource "helm_release" "task_manager" {
   name      = var.release_name
-  chart     = "${path.module}/../charts/task-manager"
+  chart     = "${path.module}/../../charts/task-manager" # Adjust path relative to the module
   namespace = var.namespace
   wait      = true
   timeout   = 600
@@ -66,7 +66,7 @@ resource "helm_release" "task_manager" {
 
   set {
     name  = "image.repository"
-    value = local.image_repository
+    value = var.image_repository
   }
 
   set {

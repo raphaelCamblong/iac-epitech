@@ -1,8 +1,6 @@
 resource "google_compute_network" "main" {
   name                    = "${var.name_prefix}-vpc"
   auto_create_subnetworks = false
-
-  depends_on = [google_project_service.required["compute.googleapis.com"]]
 }
 
 resource "google_compute_subnetwork" "gke" {
@@ -28,8 +26,6 @@ resource "google_compute_global_address" "private_service_access" {
   address_type  = "INTERNAL"
   prefix_length = 16
   network       = google_compute_network.main.id
-
-  depends_on = [google_project_service.required["servicenetworking.googleapis.com"]]
 }
 
 resource "google_service_networking_connection" "private_vpc_connection" {
@@ -41,6 +37,4 @@ resource "google_service_networking_connection" "private_vpc_connection" {
 resource "google_compute_address" "ingress" {
   name   = "${var.name_prefix}-ingress-ip"
   region = var.region
-
-  depends_on = [google_project_service.required["compute.googleapis.com"]]
 }
