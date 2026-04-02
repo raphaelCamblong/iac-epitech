@@ -2,6 +2,16 @@ variable "project_id" {
   type = string
 }
 
+variable "github_repo_url" {
+  type    = string
+  default = "https://github.com/raphaelCamblong/iac-epitech.git"
+}
+
+variable "github_pat" {
+  type      = string
+  sensitive = true
+}
+
 variable "region" {
   type    = string
   default = "europe-west9"

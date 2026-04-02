@@ -1,5 +1,0 @@
-project_id   = "your-gcp-project-id"
-region       = "europe-west9"
-image_tag    = "latest"
-ingress_host = "prod.task-manager.example.com"
-jwt_secret   = "change-me-in-ci"

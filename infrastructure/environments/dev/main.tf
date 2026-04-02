@@ -111,3 +111,13 @@ module "helm" {
   hpa_min_replicas  = var.hpa_min_replicas
   hpa_max_replicas  = var.hpa_max_replicas
 }
+
+# ARC Module
+module "arc" {
+  source = "../../modules/arc"
+
+  github_repo_url = var.github_repo_url
+  github_pat      = var.github_pat
+
+  depends_on = [module.gke]
+}

@@ -10,12 +10,12 @@ jobs:
   deploy:
     name: Deploy Infrastructure
     # Use self-hosted runner as requested
-    runs-on: self-hosted
+    runs-on: arc-runner-set
     # Only run if the previous App CI workflow was successful AND it's main or develop
     if: >
       ${{ github.event.workflow_run.conclusion == 'success' }} &&
       (${{ github.event.workflow_run.head_branch == 'main' }} || ${{ github.event.workflow_run.head_branch == 'develop' }})
-    
+
     # Dynamically select 'prod' or 'dev' environment in GitHub Actions (forces approval for prod if configured in repo settings)
     environment:
       name: ${{ github.event.workflow_run.head_branch == 'main' && 'prod' || 'dev' }}
@@ -27,6 +27,10 @@ jobs:
     env:
       # Pass the commit sha from the triggering workflow as the image tag
       TF_VAR_image_tag: ${{ github.event.workflow_run.head_sha }}
+      # Inject JWT Secret from GitHub Actions Secrets
+      TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
+      # Inject GitHub PAT for ARC runner registration
+      TF_VAR_github_pat: ${{ secrets.PAT }}
 
     steps:
       - name: Checkout Code
@@ -52,7 +56,8 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+          workload_identity_provider: 'projects/${{ vars.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider'
+          service_account: 'github-actions-sa@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com'
 
       - name: Terraform Init
         working-directory: ${{ env.TF_DIR }}
@@ -77,9 +82,9 @@ jobs:
       - name: Run Load Test
         working-directory: locust
         run: >
-          locust -f locustfile.py 
-          --headless 
-          -u 10 
-          -r 2 
-          --run-time 1m 
+          locust -f locustfile.py
+          --headless
+          -u 10
+          -r 2
+          --run-time 1m
           --host ${{ env.URL }}
