@@ -23,14 +23,13 @@ resource "google_sql_database_instance" "main" {
 
     ip_configuration {
       ipv4_enabled                                  = false
-      private_network                               = google_compute_network.main.id
+      private_network                               = var.network_id
       enable_private_path_for_google_cloud_services = true
     }
   }
 
   depends_on = [
-    google_project_service.required["sqladmin.googleapis.com"],
-    google_service_networking_connection.private_vpc_connection,
+    var.private_vpc_connection
   ]
 }
 

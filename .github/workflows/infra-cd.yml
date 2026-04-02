@@ -1,0 +1,90 @@
+name: Infra CD
+
+on:
+  workflow_run:
+    workflows: ["App CI"]
+    types:
+      - completed
+
+jobs:
+  deploy:
+    name: Deploy Infrastructure
+    # Use self-hosted runner as requested
+    runs-on: arc-runner-set
+    # Only run if the previous App CI workflow was successful AND it's main or develop
+    if: >
+      ${{ github.event.workflow_run.conclusion == 'success' }} &&
+      (${{ github.event.workflow_run.head_branch == 'main' }} || ${{ github.event.workflow_run.head_branch == 'develop' }})
+
+    # Dynamically select 'prod' or 'dev' environment in GitHub Actions (forces approval for prod if configured in repo settings)
+    environment:
+      name: ${{ github.event.workflow_run.head_branch == 'main' && 'prod' || 'dev' }}
+
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    env:
+      # Pass the commit sha from the triggering workflow as the image tag
+      TF_VAR_image_tag: ${{ github.event.workflow_run.head_sha }}
+      # Inject JWT Secret from GitHub Actions Secrets
+      TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
+      # Inject GitHub PAT for ARC runner registration
+      TF_VAR_github_pat: ${{ secrets.PAT }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Set Terraform Working Directory
+        run: |
+          if [[ "${{ github.event.workflow_run.head_branch }}" == "main" ]]; then
+            echo "TF_DIR=infrastructure/environments/prod" >> $GITHUB_ENV
+            echo "URL=https://prod.task-manager.example.com" >> $GITHUB_ENV
+          else
+            echo "TF_DIR=infrastructure/environments/dev" >> $GITHUB_ENV
+            echo "URL=https://dev.task-manager.example.com" >> $GITHUB_ENV
+          fi
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/${{ vars.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider'
+          service_account: 'github-actions-sa@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com'
+
+      - name: Terraform Init
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform init
+
+      - name: Terraform Plan
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform plan -out=tfplan
+
+      - name: Terraform Apply
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform apply -auto-approve tfplan
+
+      - name: Setup Python (for Locust)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Locust
+        run: pip install locust
+
+      - name: Run Load Test
+        working-directory: locust
+        run: >
+          locust -f locustfile.py
+          --headless
+          -u 10
+          -r 2
+          --run-time 1m
+          --host ${{ env.URL }}
