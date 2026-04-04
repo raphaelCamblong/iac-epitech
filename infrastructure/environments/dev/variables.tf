@@ -63,8 +63,9 @@ variable "node_machine_type" {
 }
 
 variable "node_disk_size_gb" {
-  type    = number
-  default = 50
+  type        = number
+  description = "Boot disk per node; pd-standard (see GKE module) avoids SSD quota."
+  default     = 20
 }
 
 variable "db_instance_name" {
@@ -83,8 +84,9 @@ variable "db_availability_type" {
 }
 
 variable "db_disk_size_gb" {
-  type    = number
-  default = 20
+  type        = number
+  description = "Cloud SQL allocation; 10 GB is the usual minimum for PostgreSQL."
+  default     = 10
 }
 
 variable "db_name" {

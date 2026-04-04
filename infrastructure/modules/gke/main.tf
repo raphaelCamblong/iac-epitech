@@ -32,6 +32,11 @@ resource "google_container_cluster" "main" {
   initial_node_count       = 1
   networking_mode          = "VPC_NATIVE"
 
+  node_config {
+    disk_type    = "pd-standard"
+    disk_size_gb = var.node_disk_size_gb
+  }
+
   release_channel {
     channel = var.gke_release_channel
   }
@@ -61,6 +66,7 @@ resource "google_container_node_pool" "primary" {
   node_config {
     machine_type    = var.node_machine_type
     disk_size_gb    = var.node_disk_size_gb
+    disk_type       = "pd-standard"
     service_account = google_service_account.gke_nodes.email
     oauth_scopes    = ["https://www.googleapis.com/auth/cloud-platform"]
 

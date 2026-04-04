@@ -53,18 +53,20 @@ variable "gke_release_channel" {
 }
 
 variable "node_count" {
-  type    = number
-  default = 3
+  type        = number
+  description = "Small pool for a lightweight API; scale up if you need more headroom."
+  default     = 2
 }
 
 variable "node_machine_type" {
   type    = string
-  default = "e2-standard-4"
+  default = "e2-standard-2"
 }
 
 variable "node_disk_size_gb" {
-  type    = number
-  default = 100
+  type        = number
+  description = "Boot disk per node; pd-standard (see GKE module) avoids SSD quota."
+  default     = 30
 }
 
 variable "db_instance_name" {
@@ -73,18 +75,21 @@ variable "db_instance_name" {
 }
 
 variable "db_tier" {
-  type    = string
-  default = "db-custom-2-7680"
+  type        = string
+  description = "Right-sized for a small Postgres workload; override for more CPU/RAM."
+  default     = "db-custom-1-3840"
 }
 
 variable "db_availability_type" {
-  type    = string
-  default = "REGIONAL"
+  type        = string
+  description = "REGIONAL duplicates the instance (higher cost). ZONAL is enough for many small apps."
+  default     = "ZONAL"
 }
 
 variable "db_disk_size_gb" {
-  type    = number
-  default = 100
+  type        = number
+  description = "Cloud SQL allocation; 10 GB is the usual minimum for PostgreSQL."
+  default     = 10
 }
 
 variable "db_name" {
@@ -117,15 +122,15 @@ variable "ingress_host" {
 
 variable "replica_count" {
   type    = number
-  default = 3
+  default = 2
 }
 
 variable "hpa_min_replicas" {
   type    = number
-  default = 3
+  default = 2
 }
 
 variable "hpa_max_replicas" {
   type    = number
-  default = 10
+  default = 6
 }

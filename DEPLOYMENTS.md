@@ -93,6 +93,11 @@ graph TD
 
 Before utilizing the CI/CD pipelines, the following manual setup is required:
 
+If services not enable yet on the fresh project
+```bash
+gcloud services enable compute.googleapis.com container.googleapis.com artifactregistry.googleapis.com sqladmin.googleapis.com servicenetworking.googleapis.com --project="YOUR_NEW_PROJECT_ID"
+```
+
 ### A. Create Terraform State Buckets
 Since Terraform manages the entire infrastructure, the state buckets must be created manually first.
 ```bash
@@ -109,49 +114,36 @@ gcloud storage buckets create gs://terraform-state-task-manager-prod --location=
 ### B. Configure Workload Identity Federation for GitHub Actions
 We use keyless authentication to GCP. You need to create a Workload Identity Pool and Provider in your GCP project so GitHub Actions can securely authenticate without needing a JSON service account key.
 
-Run the following script locally to configure it:
+Run [`scripts/gcp/setup-github-actions-wif.sh`](scripts/gcp/setup-github-actions-wif.sh) from the repository root. Configure it by exporting **YOUR_PROJECT_ID** (GCP project ID), **YOUR_GITHUB_ORG** (GitHub user or organization), and **YOUR_REPO** (repository name), then execute the script:
 
 ```bash
-# 1. Set your GCP project ID
+chmod +x scripts/gcp/setup-github-actions-wif.sh
+
 export YOUR_PROJECT_ID="your-gcp-project-id"
-export YOUR_GITHUB_ORG="your-github-username-or-org"
+export YOUR_GITHUB_ORG="your-github-org-or-username"
 export YOUR_REPO="your-repo-name"
 
-# 2. Create the Workload Identity Pool
-gcloud iam workload-identity-pools create "github-actions-pool" \
-  --project="${YOUR_PROJECT_ID}" \
-  --location="global" \
-  --display-name="GitHub Actions Pool"
-
-# 3. Create the OIDC Provider
-gcloud iam workload-identity-pools providers create-oidc "github-actions-provider" \
-  --project="${YOUR_PROJECT_ID}" \
-  --location="global" \
-  --workload-identity-pool="github-actions-pool" \
-  --display-name="GitHub Actions Provider" \
-  --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository" \
-  --attribute-condition="assertion.repository == '${YOUR_GITHUB_ORG}/${YOUR_REPO}'" \
-  --issuer-uri="https://token.actions.githubusercontent.com"
-
-# 4. Get your Project Number (Required for GitHub workflows)
-PROJECT_NUMBER=$(gcloud projects describe ${YOUR_PROJECT_ID} --format="value(projectNumber)")
-echo "Your Project Number is: ${PROJECT_NUMBER}"
-
-# 5. Bind the policy to your Service Account
-gcloud iam service-accounts add-iam-policy-binding "github-actions-sa@${YOUR_PROJECT_ID}.iam.gserviceaccount.com" \
-  --project="${YOUR_PROJECT_ID}" \
-  --role="roles/iam.workloadIdentityUser" \
-  --member="principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github-actions-pool/attribute.repository/${YOUR_GITHUB_ORG}/${YOUR_REPO}"
+./scripts/gcp/setup-github-actions-wif.sh
 ```
 
-Then workflows use repository **Variables** (not Secrets) for identifiers such as the GCP project ID and project number — these values are not sensitive credentials.
+Alternatively, pass the same three values as positional parameters (no `export` required):
+
+```bash
+./scripts/gcp/setup-github-actions-wif.sh your-gcp-project-id your-github-org-or-username your-repo-name
+```
+
+The script prints **Your Project Number is:** … — use that value when configuring GitHub Variables in the next section.
+
+### C. Set up GitHub Variables
+
+The workflows use repository **Variables** (not Secrets) for identifiers such as the GCP project ID and project number — these values are not sensitive credentials.
 
 1. Open your repository **Settings**.
 2. In the sidebar, click **Secrets and variables**, then **Actions**.
 3. Open the **Variables** tab (next to **Secrets**).
 4. Click **New repository variable** and add the following two entries:
-   - **Name:** `GCP_PROJECT_ID` — **Value:** your GCP project ID (the same value you set as `YOUR_PROJECT_ID` in section B).
-   - **Name:** `GCP_PROJECT_NUMBER` — **Value:** the project number printed by step 4 of the Workload Identity script (`echo "Your Project Number is: …"`).
+   - **Name:** `GCP_PROJECT_ID` — **Value:** your GCP project ID (the same value you passed as `YOUR_PROJECT_ID` in section B).
+   - **Name:** `GCP_PROJECT_NUMBER` — **Value:** the project number printed at the end of [`setup-github-actions-wif.sh`](scripts/gcp/setup-github-actions-wif.sh) (`Your Project Number is: …`).
 
 ### D. Configure GitHub Environments
 To enable the manual approval gate for Production deployments:
