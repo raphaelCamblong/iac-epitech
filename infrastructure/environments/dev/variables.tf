@@ -74,7 +74,7 @@ variable "db_instance_name" {
 
 variable "db_tier" {
   type    = string
-  default = "db-custom-1-3840"
+  default = "db-f1-micro"
 }
 
 variable "db_availability_type" {

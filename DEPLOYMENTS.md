@@ -188,23 +188,33 @@ cd infrastructure/environments/dev
 # Initialize Terraform
 terraform init
 
-# Apply core infrastructure targets explicitly avoiding the app helm chart
-terraform apply -target=module.network \
-                -target=module.database \
-                -target=module.gke \
-                -target=module.artifact_registry \
-                -target=module.arc \
-                -var="github_pat=YOUR_GITHUB_PAT"
+# Save the plan to a file to guarantee apply executes exactly what was reviewed
+terraform plan -target=module.network \
+               -target=module.database \
+               -target=module.gke \
+               -target=module.artifact_registry \
+               -target=module.arc \
+               -var="github_pat=YOUR_GITHUB_PAT" \
+               -out=bootstrap.tfplan
+
+# Apply that exact plan file
+terraform apply "bootstrap.tfplan"
 
 # Repeat for the prod environment
 cd ../prod
 terraform init
-terraform apply -target=module.network \
-                -target=module.database \
-                -target=module.gke \
-                -target=module.artifact_registry \
-                -target=module.arc \
-                -var="github_pat=YOUR_GITHUB_PAT"
+
+# Save the plan to a file to guarantee apply executes exactly what was reviewed
+terraform plan -target=module.network \
+               -target=module.database \
+               -target=module.gke \
+               -target=module.artifact_registry \
+               -target=module.arc \
+               -var="github_pat=YOUR_GITHUB_PAT" \
+               -out=bootstrap.tfplan
+
+# Apply that exact plan file
+terraform apply "bootstrap.tfplan"
 ```
 
 ### C. Trigger the CI/CD Pipeline
