@@ -66,10 +66,10 @@ jobs:
         run: |
           if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
             echo "ENV=prod" >> $GITHUB_ENV
-            echo "REGISTRY_URL=europe-west9-docker.pkg.dev/your-gcp-project-id/task-manager-prod" >> $GITHUB_ENV
+            echo "REGISTRY_URL=europe-west9-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/task-manager-prod" >> $GITHUB_ENV
           else
             echo "ENV=dev" >> $GITHUB_ENV
-            echo "REGISTRY_URL=europe-west9-docker.pkg.dev/your-gcp-project-id/task-manager-dev" >> $GITHUB_ENV
+            echo "REGISTRY_URL=europe-west9-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/task-manager-dev" >> $GITHUB_ENV
           fi
 
       - name: Configure Docker
