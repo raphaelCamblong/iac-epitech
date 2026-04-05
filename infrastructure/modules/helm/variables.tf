@@ -1,10 +1,10 @@
 variable "ingress_controller_namespace" {
-  type = string
+  type    = string
   default = "ingress-nginx"
 }
 
 variable "ingress_nginx_chart_version" {
-  type = string
+  type    = string
   default = "4.10.0"
 }
 
@@ -13,12 +13,12 @@ variable "ingress_static_ip" {
 }
 
 variable "namespace" {
-  type = string
+  type    = string
   default = "default"
 }
 
 variable "release_name" {
-  type = string
+  type    = string
   default = "task-manager"
 }
 
@@ -27,7 +27,7 @@ variable "database_url" {
 }
 
 variable "jwt_secret" {
-  type    = string
+  type      = string
   sensitive = true
 }
 
@@ -40,7 +40,7 @@ variable "image_tag" {
 }
 
 variable "replica_count" {
-  type = number
+  type    = number
   default = 2
 }
 
@@ -49,11 +49,11 @@ variable "ingress_host" {
 }
 
 variable "hpa_min_replicas" {
-  type = number
+  type    = number
   default = 2
 }
 
 variable "hpa_max_replicas" {
-  type = number
+  type    = number
   default = 5
 }
