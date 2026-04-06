@@ -117,10 +117,6 @@ variable "image_tag" {
   type = string
 }
 
-variable "ingress_host" {
-  type = string
-}
-
 variable "replica_count" {
   type    = number
   default = 2

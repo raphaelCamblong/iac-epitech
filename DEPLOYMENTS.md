@@ -19,7 +19,7 @@ graph TD
         LB["TCP Load Balancer"]
     end
 
-    User -->|HTTPS| LB
+    User -->|HTTP via nip.io| LB
     LB -->|Ingress Nginx| GKE
     GKE -->|VPC Native| Subnet
     GKE -->|Reads Images| AR
@@ -158,7 +158,9 @@ In both `infrastructure/environments/dev/terraform.tfvars.example` and `infrastr
 cp infrastructure/environments/dev/terraform.tfvars.example infrastructure/environments/dev/terraform.tfvars
 cp infrastructure/environments/prod/terraform.tfvars.example infrastructure/environments/prod/terraform.tfvars
 ```
-2. Replace `project-c146e532-e1f5-4e81-860` / `your-gcp-project-id` with your actual GCP Project ID.
+2. Replace `your-gcp-project-id` with your actual GCP Project ID.
+
+> **Note:** You do not need to set an `ingress_host`. The Ingress hostname is automatically derived from the provisioned static IP using [nip.io](https://nip.io) (`<ip>.nip.io`), which resolves to that IP without any DNS configuration.
 
 ---
 
