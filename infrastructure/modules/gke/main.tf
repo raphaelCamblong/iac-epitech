@@ -32,11 +32,6 @@ resource "google_container_cluster" "main" {
   initial_node_count       = 1
   networking_mode          = "VPC_NATIVE"
 
-  node_config {
-    disk_type    = "pd-standard"
-    disk_size_gb = var.node_disk_size_gb
-  }
-
   release_channel {
     channel = var.gke_release_channel
   }
