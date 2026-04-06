@@ -11,10 +11,13 @@ resource "google_sql_database_instance" "main" {
   deletion_protection = false
 
   settings {
-    tier              = var.db_tier
-    availability_type = var.db_availability_type
-    disk_size         = var.db_disk_size_gb
-    disk_type         = "PD_SSD"
+    tier                  = var.db_tier
+    edition               = "ENTERPRISE"
+    availability_type     = var.db_availability_type
+    disk_size             = var.db_disk_size_gb
+    disk_type             = var.db_disk_type
+    disk_autoresize       = var.db_disk_autoresize
+    disk_autoresize_limit = var.db_disk_autoresize_limit_gb
 
     backup_configuration {
       enabled                        = true

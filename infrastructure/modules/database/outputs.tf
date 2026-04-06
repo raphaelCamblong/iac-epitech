@@ -11,12 +11,12 @@ output "database_user" {
 }
 
 output "database_password" {
-  value = random_password.database.result
+  value     = random_password.database.result
   sensitive = true
 }
 
 output "database_url" {
-  value = "postgres://${google_sql_user.app.name}:${random_password.database.result}@${google_sql_database_instance.main.private_ip_address}:5432/${google_sql_database.app.name}?sslmode=disable"
+  value     = "postgres://${google_sql_user.app.name}:${random_password.database.result}@${google_sql_database_instance.main.private_ip_address}:5432/${google_sql_database.app.name}?sslmode=disable"
   sensitive = true
 }
 
