@@ -25,8 +25,15 @@ func Run(cfg *config.Config, log zerolog.Logger) error {
 	if err != nil {
 		return err
 	}
-	sqlDB, _ := db.DB()
-	defer sqlDB.Close()
+	sqlDB, err := db.DB()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if closeErr := sqlDB.Close(); closeErr != nil {
+			log.Error().Err(closeErr).Msg("close database")
+		}
+	}()
 
 	taskRepo := repository.NewTaskGormRepository(db)
 	userRepo := repository.NewUserGormRepository(db)

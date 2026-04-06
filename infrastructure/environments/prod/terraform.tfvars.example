@@ -1,7 +1,7 @@
 # Copy to terraform.tfvars and fill in values. Do not commit terraform.tfvars with real secrets.
 #
 # Required variables (no defaults in root module):
-#   - project_id, github_pat, jwt_secret, image_tag, ingress_host
+#   - project_id, github_pat, jwt_secret, image_tag
 #
 # Optional: set TF_VAR_github_pat / TF_VAR_jwt_secret instead of listing them here.
 
@@ -13,8 +13,9 @@ github_repo_url = "https://github.com/your-org/your-repo"
 github_pat = "your-github-personal-access-token"
 jwt_secret = "your-jwt-signing-secret"
 
-image_tag    = "latest"
-ingress_host = "prod.task-manager.example.com"
+image_tag = "latest"
+
+# ingress_host is auto-derived from the static IP using nip.io (<ip>.nip.io)
 
 # --- Optional overrides (defaults are in variables.tf) ---
 # region                 = "europe-west9"

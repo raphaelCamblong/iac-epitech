@@ -23,11 +23,9 @@ jobs:
       id-token: 'write'
 
     env:
-      # Pass the commit sha from the triggering workflow as the image tag
+      TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
       TF_VAR_image_tag: ${{ github.event.workflow_run.head_sha }}
-      # Inject JWT Secret from GitHub Actions Secrets
       TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
-      # Inject GitHub PAT for ARC runner registration
       TF_VAR_github_pat: ${{ secrets.PAT }}
 
     steps:
@@ -40,10 +38,8 @@ jobs:
         run: |
           if [[ "${{ github.event.workflow_run.head_branch }}" == "main" ]]; then
             echo "TF_DIR=infrastructure/environments/prod" >> $GITHUB_ENV
-            echo "URL=https://prod.task-manager.example.com" >> $GITHUB_ENV
           else
             echo "TF_DIR=infrastructure/environments/dev" >> $GITHUB_ENV
-            echo "URL=https://dev.task-manager.example.com" >> $GITHUB_ENV
           fi
 
       - name: Setup Terraform
@@ -69,6 +65,11 @@ jobs:
       - name: Terraform Apply
         working-directory: ${{ env.TF_DIR }}
         run: terraform apply -auto-approve tfplan
+
+      - name: Get Ingress URL
+        id: ingress
+        working-directory: ${{ env.TF_DIR }}
+        run: echo "URL=$(terraform output -raw ingress_url)" >> $GITHUB_ENV
 
       - name: Setup Python (for Locust)
         uses: actions/setup-python@v6

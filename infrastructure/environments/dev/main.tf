@@ -106,7 +106,7 @@ module "helm" {
   jwt_secret        = var.jwt_secret
   image_repository  = "${var.region}-docker.pkg.dev/${var.project_id}/${var.artifact_registry_name}-dev/task-manager"
   image_tag         = var.image_tag
-  ingress_host      = var.ingress_host
+  ingress_host      = "${module.network.ingress_static_ip}.nip.io"
   replica_count     = var.replica_count
   hpa_min_replicas  = var.hpa_min_replicas
   hpa_max_replicas  = var.hpa_max_replicas
