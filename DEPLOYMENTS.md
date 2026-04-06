@@ -216,5 +216,3 @@ Now that the Artifact Registries and ARC Runners exist and are active in both en
 1. Commit and push your code to GitHub (`main` or `develop` branches).
 2. The `app-ci.yml` workflow will now successfully build and push the first Docker image into Artifact Registry.
 3. The `infra-cd.yml` workflow will automatically trigger, run on your self-hosted GKE runners, and apply the complete Terraform state (deploying the database credentials and the `helm` application module).
-
-Your application is now fully automated!
