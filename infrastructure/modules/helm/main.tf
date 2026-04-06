@@ -59,40 +59,17 @@ resource "helm_release" "task_manager" {
   wait      = true
   timeout   = 600
 
-  set {
-    name  = "existingSecret"
-    value = kubernetes_secret.app_secrets.metadata[0].name
-  }
-
-  set {
-    name  = "image.repository"
-    value = var.image_repository
-  }
-
-  set {
-    name  = "image.tag"
-    value = var.image_tag
-  }
-
-  set {
-    name  = "replicaCount"
-    value = var.replica_count
-  }
-
-  set {
-    name  = "ingress.hosts[0].host"
-    value = var.ingress_host
-  }
-
-  set {
-    name  = "hpa.minReplicas"
-    value = var.hpa_min_replicas
-  }
-
-  set {
-    name  = "hpa.maxReplicas"
-    value = var.hpa_max_replicas
-  }
+  values = [
+    templatefile("${path.module}/task-manager-overrides.yaml.tftpl", {
+      existing_secret  = kubernetes_secret.app_secrets.metadata[0].name
+      image_repository = var.image_repository
+      image_tag        = var.image_tag
+      replica_count    = var.replica_count
+      ingress_host     = var.ingress_host
+      hpa_min_replicas = var.hpa_min_replicas
+      hpa_max_replicas = var.hpa_max_replicas
+    }),
+  ]
 
   depends_on = [
     helm_release.ingress_nginx,
