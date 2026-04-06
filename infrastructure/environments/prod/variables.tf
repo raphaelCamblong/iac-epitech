@@ -3,8 +3,9 @@ variable "project_id" {
 }
 
 variable "github_repo_url" {
-  type    = string
-  default = "https://github.com/raphaelCamblong/iac-epitech.git"
+  type        = string
+  description = "Repository URL for ARC"
+  default     = "https://github.com/raphaelCamblong/iac-epitech"
 }
 
 variable "github_pat" {
