@@ -1,0 +1,27 @@
+# Copy to terraform.tfvars and fill in values. Do not commit terraform.tfvars with real secrets.
+#
+# Required variables (no defaults in root module):
+#   - project_id, github_pat, jwt_secret, image_tag, ingress_host
+#
+# Optional: set TF_VAR_github_pat / TF_VAR_jwt_secret instead of listing them here.
+
+project_id = "your-gcp-project-id"
+
+# ARC: URL without a trailing .git (GitHub API rejects .git in repo paths)
+github_repo_url = "https://github.com/your-org/your-repo"
+
+github_pat = "your-github-personal-access-token"
+jwt_secret = "your-jwt-signing-secret"
+
+image_tag    = "latest"
+ingress_host = "dev.task-manager.example.com"
+
+# --- Optional overrides (defaults are in variables.tf) ---
+# region                 = "europe-west9"
+# name_prefix            = "task-manager"
+# node_count             = 1
+# node_machine_type      = "e2-standard-2"
+# db_tier                = "db-f1-micro"
+# replica_count          = 1
+# hpa_min_replicas       = 1
+# hpa_max_replicas       = 3
