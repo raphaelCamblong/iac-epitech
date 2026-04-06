@@ -54,7 +54,7 @@ resource "kubernetes_secret" "app_secrets" {
 
 resource "helm_release" "task_manager" {
   name      = var.release_name
-  chart     = "${path.module}/../../charts/task-manager" # Adjust path relative to the module
+  chart     = "${path.module}/../../../charts/task-manager"
   namespace = var.namespace
   wait      = true
   timeout   = 600
