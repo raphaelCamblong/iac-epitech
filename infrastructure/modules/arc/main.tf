@@ -13,7 +13,6 @@ resource "helm_release" "gha_runner_scale_set" {
   namespace        = "arc-runners"
   create_namespace = true
 
-  # GitHub's REST API rejects repo paths that include a trailing ".git" (404 on registration-token).
   set {
     name  = "githubConfigUrl"
     value = trimsuffix(var.github_repo_url, ".git")
