@@ -95,7 +95,7 @@ Before utilizing the CI/CD pipelines, the following manual setup is required:
 
 If services not enable yet on the fresh project
 ```bash
-gcloud services enable compute.googleapis.com container.googleapis.com artifactregistry.googleapis.com sqladmin.googleapis.com servicenetworking.googleapis.com --project="YOUR_NEW_PROJECT_ID"
+gcloud services enable compute.googleapis.com container.googleapis.com artifactregistry.googleapis.com sqladmin.googleapis.com servicenetworking.googleapis.com cloudresourcemanager.googleapis.com --project="YOUR_NEW_PROJECT_ID"
 ```
 
 ### A. Create Terraform State Buckets
