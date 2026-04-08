@@ -20,6 +20,7 @@ image_tag = "latest"
 # --- Optional overrides (defaults are in variables.tf) ---
 # region                 = "europe-west9"
 # name_prefix            = "task-manager"
+# gke_node_locations     = null   # default: single zone [region]-a; set three zones for HA-style dev
 # node_count             = 1
 # node_machine_type      = "e2-standard-2"
 # db_tier                = "db-f1-micro"

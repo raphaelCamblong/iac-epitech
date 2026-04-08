@@ -32,7 +32,7 @@ resource "google_sql_database_instance" "main" {
   }
 
   depends_on = [
-    var.private_vpc_connection
+    var.private_service_networking_connection,
   ]
 }
 

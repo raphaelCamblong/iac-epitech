@@ -20,10 +20,15 @@ image_tag = "latest"
 # --- Optional overrides (defaults are in variables.tf) ---
 # region                 = "europe-west9"
 # name_prefix            = "task-manager"
-# node_count             = 2
+# node_count             = 1
+# gke_node_pool_max_count = 2   # per zone; regional prod ≈ 3 zones → max ~6 nodes
+# node_disk_size_gb      = 20   # pd-standard (not SSD); avoid 100 unless you need it
+# db_disk_size_gb        = 10
+# db_disk_type           = "PD_HDD"   # avoids SSD_TOTAL_GB; do not use PD_SSD on low quota
+# db_disk_autoresize_limit_gb = 30
 # node_machine_type      = "e2-standard-2"
 # db_tier                = "db-custom-1-3840"
-# db_availability_type   = "REGIONAL"
+# db_availability_type   = "ZONAL"
 # replica_count          = 2
 # hpa_min_replicas       = 2
 # hpa_max_replicas       = 6

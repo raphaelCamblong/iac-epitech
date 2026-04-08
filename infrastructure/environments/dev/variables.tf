@@ -54,8 +54,16 @@ variable "gke_release_channel" {
 }
 
 variable "node_count" {
-  type    = number
-  default = 1
+  type        = number
+  default     = 1
+  description = "GKE primary pool: nodes per zone in each configured zone. With the default single-zone pool (gke_node_locations), 1 is one worker VM."
+}
+
+variable "gke_node_locations" {
+  type        = list(string)
+  default     = null
+  description = "Primary pool zones. null defaults to [region]-a only (one zone, lower cost). Set all regional zones for multi-AZ dev, e.g. [\"europe-west9-a\", \"europe-west9-b\", \"europe-west9-c\"]."
+  nullable    = true
 }
 
 variable "node_machine_type" {

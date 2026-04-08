@@ -55,19 +55,26 @@ variable "gke_release_channel" {
 
 variable "node_count" {
   type        = number
-  description = "Small pool for a lightweight API; scale up if you need more headroom."
+  description = "GKE primary pool: nodes per zone. Prod uses all regional zones, so total VMs ≈ node_count × zone count (often three)."
+  default     = 1
+}
+
+variable "gke_node_pool_max_count" {
+  type        = number
+  description = "Max nodes per zone (autoscaling). Keeps total disks bounded: ≈ max × zones × node_disk_size_gb."
   default     = 2
 }
 
 variable "node_machine_type" {
-  type    = string
-  default = "e2-standard-2"
+  type        = string
+  description = "Same light default as dev."
+  default     = "e2-standard-2"
 }
 
 variable "node_disk_size_gb" {
   type        = number
-  description = "Boot disk per node; pd-standard (see GKE module) avoids SSD quota."
-  default     = 30
+  description = "Boot disk per node (pd-standard in GKE module = standard PD quota, not SSD). Prod is multi-zone: total node disks ≈ size × node_count × zones."
+  default     = 20
 }
 
 variable "db_instance_name" {
@@ -78,7 +85,7 @@ variable "db_instance_name" {
 variable "db_tier" {
   type        = string
   description = "Right-sized for a small Postgres workload; override for more CPU/RAM."
-  default     = "db-custom-1-3840"
+  default     = "db-f1-micro"
 }
 
 variable "db_availability_type" {
@@ -89,8 +96,26 @@ variable "db_availability_type" {
 
 variable "db_disk_size_gb" {
   type        = number
-  description = "Cloud SQL allocation; 10 GB is the usual minimum for PostgreSQL."
+  description = "Cloud SQL initial allocation (GB). Increase via Terraform if needed; shrinking often requires instance replacement."
   default     = 10
+}
+
+variable "db_disk_type" {
+  type        = string
+  description = "PD_HDD recommended for cost and SSD quota; PD_SSD counts against SSD_TOTAL_GB."
+  default     = "PD_HDD"
+}
+
+variable "db_disk_autoresize" {
+  type        = bool
+  description = "Let Cloud SQL grow disk automatically up to db_disk_autoresize_limit_gb."
+  default     = true
+}
+
+variable "db_disk_autoresize_limit_gb" {
+  type        = number
+  description = "Cap autoresize so a DB cannot grow into hundreds of GB by accident."
+  default     = 30
 }
 
 variable "db_name" {
@@ -129,5 +154,5 @@ variable "hpa_min_replicas" {
 
 variable "hpa_max_replicas" {
   type    = number
-  default = 6
+  default = 10
 }
