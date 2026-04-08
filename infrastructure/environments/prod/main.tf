@@ -53,6 +53,7 @@ module "gke" {
   pods_secondary_range_name     = var.pods_secondary_range_name
   services_secondary_range_name = var.services_secondary_range_name
   node_count                    = var.node_count
+  node_pool_max_count           = var.gke_node_pool_max_count
   node_machine_type             = var.node_machine_type
   node_disk_size_gb             = var.node_disk_size_gb
 }
@@ -61,15 +62,20 @@ module "gke" {
 module "database" {
   source = "../../modules/database"
 
-  db_instance_name       = "${var.db_instance_name}-prod"
-  region                 = var.region
-  db_tier                = var.db_tier
-  db_availability_type   = var.db_availability_type
-  db_disk_size_gb        = var.db_disk_size_gb
-  network_id             = module.network.network_id
-  private_vpc_connection = module.network.private_vpc_connection
-  db_name                = var.db_name
-  db_user                = var.db_user
+  db_instance_name                      = "${var.db_instance_name}-prod"
+  region                                = var.region
+  db_tier                               = var.db_tier
+  db_availability_type                  = var.db_availability_type
+  db_disk_size_gb                       = var.db_disk_size_gb
+  db_disk_type                          = var.db_disk_type
+  db_disk_autoresize                    = var.db_disk_autoresize
+  db_disk_autoresize_limit_gb           = var.db_disk_autoresize_limit_gb
+  network_id                            = module.network.network_id
+  private_service_networking_connection = module.network.private_service_networking_connection
+  db_name                               = var.db_name
+  db_user                               = var.db_user
+
+  depends_on = [module.network]
 }
 
 # Artifact Registry Module

@@ -20,7 +20,7 @@ variable "db_disk_size_gb" {
 
 variable "db_disk_type" {
   type        = string
-  description = "Use 'PD_STANDARD' for HDD (low footprint/no quota issues) or 'PD_SSD' for high performance."
+  description = "Cloud SQL: PD_HDD or PD_SSD."
   default     = "PD_HDD"
 }
 
@@ -39,9 +39,9 @@ variable "network_id" {
   type = string
 }
 
-variable "private_vpc_connection" {
-  type        = string
-  description = "Dependency on private VPC connection"
+variable "private_service_networking_connection" {
+  type        = any
+  description = "google_service_networking_connection from the network module. Real resource reference for depends_on so destroy order is Cloud SQL → PSA, not parallel."
 }
 
 variable "db_name" {

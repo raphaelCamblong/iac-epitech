@@ -32,9 +32,14 @@ resource "google_container_cluster" "main" {
   initial_node_count       = 1
   networking_mode          = "VPC_NATIVE"
 
+  # Default pool exists only until remove_default_node_pool finishes. Without this block,
+  # GKE uses API defaults (often pd-balanced) → SSD_TOTAL_GB quota even though the real pool uses pd-standard below.
   node_config {
-    disk_type    = "pd-standard"
-    disk_size_gb = var.node_disk_size_gb
+    machine_type    = var.node_machine_type
+    disk_size_gb    = var.node_disk_size_gb
+    disk_type       = "pd-standard"
+    service_account = google_service_account.gke_nodes.email
+    oauth_scopes    = ["https://www.googleapis.com/auth/cloud-platform"]
   }
 
   release_channel {
@@ -49,6 +54,12 @@ resource "google_container_cluster" "main" {
     cluster_secondary_range_name  = var.pods_secondary_range_name
     services_secondary_range_name = var.services_secondary_range_name
   }
+
+  lifecycle {
+    ignore_changes = [
+      node_config,
+    ]
+  }
 }
 
 resource "google_container_node_pool" "primary" {
@@ -56,11 +67,24 @@ resource "google_container_node_pool" "primary" {
   cluster  = google_container_cluster.main.name
   location = google_container_cluster.main.location
 
-  node_count = var.node_count
+  node_locations     = var.node_locations
+  initial_node_count = var.node_count
+
+  autoscaling {
+    min_node_count  = var.node_count
+    max_node_count  = var.node_pool_max_count
+    location_policy = "BALANCED"
+  }
 
   management {
     auto_repair  = true
     auto_upgrade = true
+  }
+
+  lifecycle {
+    ignore_changes = [
+      initial_node_count,
+    ]
   }
 
   node_config {

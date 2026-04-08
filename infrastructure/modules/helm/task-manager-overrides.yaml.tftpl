@@ -1,0 +1,15 @@
+# Merged after charts/task-manager/values.yaml. Map keys merge; lists (e.g. ingress.hosts) replace.
+existingSecret: "${existing_secret}"
+image:
+  repository: "${image_repository}"
+  tag: "${image_tag}"
+replicaCount: ${replica_count}
+ingress:
+  hosts:
+    - host: "${ingress_host}"
+      paths:
+        - path: /
+          pathType: Prefix
+hpa:
+  minReplicas: ${hpa_min_replicas}
+  maxReplicas: ${hpa_max_replicas}

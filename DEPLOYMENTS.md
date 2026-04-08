@@ -95,7 +95,7 @@ Before utilizing the CI/CD pipelines, the following manual setup is required:
 
 If services not enable yet on the fresh project
 ```bash
-gcloud services enable compute.googleapis.com container.googleapis.com artifactregistry.googleapis.com sqladmin.googleapis.com servicenetworking.googleapis.com --project="YOUR_NEW_PROJECT_ID"
+gcloud services enable compute.googleapis.com container.googleapis.com artifactregistry.googleapis.com sqladmin.googleapis.com servicenetworking.googleapis.com cloudresourcemanager.googleapis.com --project="YOUR_NEW_PROJECT_ID"
 ```
 
 ### A. Create Terraform State Buckets
@@ -216,5 +216,3 @@ Now that the Artifact Registries and ARC Runners exist and are active in both en
 1. Commit and push your code to GitHub (`main` or `develop` branches).
 2. The `app-ci.yml` workflow will now successfully build and push the first Docker image into Artifact Registry.
 3. The `infra-cd.yml` workflow will automatically trigger, run on your self-hosted GKE runners, and apply the complete Terraform state (deploying the database credentials and the `helm` application module).
-
-Your application is now fully automated!

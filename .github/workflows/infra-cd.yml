@@ -9,18 +9,15 @@ on:
 jobs:
   deploy:
     name: Deploy Infrastructure
-    # Use self-hosted runner as requested
     runs-on: arc-runner-set
-    # Only run if the previous App CI workflow was successful AND it's main or develop
     if: ${{ github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'develop') }}
 
-    # Dynamically select 'prod' or 'dev' environment in GitHub Actions (forces approval for prod if configured in repo settings)
     environment:
       name: ${{ github.event.workflow_run.head_branch == 'main' && 'prod' || 'dev' }}
 
     permissions:
-      contents: 'read'
-      id-token: 'write'
+      contents: read
+      id-token: write
 
     env:
       TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
@@ -29,24 +26,28 @@ jobs:
       TF_VAR_github_pat: ${{ secrets.PAT }}
 
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
-      - name: Set Terraform Working Directory
+      - name: Configure Terraform environment
         run: |
+          echo "TF_IN_AUTOMATION=true" >> "$GITHUB_ENV"
+          echo "TF_PLUGIN_CACHE_DIR=${HOME}/.terraform.d/plugin-cache" >> "$GITHUB_ENV"
           if [[ "${{ github.event.workflow_run.head_branch }}" == "main" ]]; then
-            echo "TF_DIR=infrastructure/environments/prod" >> $GITHUB_ENV
+            echo "TF_DIR=infrastructure/environments/prod" >> "$GITHUB_ENV"
           else
-            echo "TF_DIR=infrastructure/environments/dev" >> $GITHUB_ENV
+            echo "TF_DIR=infrastructure/environments/dev" >> "$GITHUB_ENV"
           fi
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v4
+      - name: Cache Terraform providers
+        uses: actions/cache@v4
         with:
-          terraform_version: 1.6.0
-          terraform_wrapper: false
+          path: ${{ env.TF_PLUGIN_CACHE_DIR }}
+          key: ${{ runner.os }}-terraform-plugins-${{ hashFiles('infrastructure/**/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-plugins-
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3
@@ -54,22 +55,31 @@ jobs:
           workload_identity_provider: 'projects/${{ vars.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider'
           service_account: 'github-actions-sa@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com'
 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.6.0
+          terraform_wrapper: false
+
       - name: Terraform Init
         working-directory: ${{ env.TF_DIR }}
-        run: terraform init
+        run: terraform init -input=false
+
+      - name: Terraform Validate
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform validate
 
       - name: Terraform Plan
         working-directory: ${{ env.TF_DIR }}
-        run: terraform plan -out=tfplan
+        run: terraform plan -no-color -input=false -out=tfplan
 
       - name: Terraform Apply
         working-directory: ${{ env.TF_DIR }}
-        run: terraform apply -auto-approve tfplan
+        run: terraform apply -no-color -input=false -auto-approve tfplan
 
       - name: Get Ingress URL
-        id: ingress
         working-directory: ${{ env.TF_DIR }}
-        run: echo "URL=$(terraform output -raw ingress_url)" >> $GITHUB_ENV
+        run: echo "URL=$(terraform output -raw ingress_url)" >> "$GITHUB_ENV"
 
       - name: Setup Python (for Locust)
         uses: actions/setup-python@v6

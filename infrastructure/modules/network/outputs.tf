@@ -10,6 +10,6 @@ output "ingress_static_ip" {
   value = google_compute_address.ingress.address
 }
 
-output "private_vpc_connection" {
-  value = google_service_networking_connection.private_vpc_connection.id
+output "private_service_networking_connection" {
+  value = google_service_networking_connection.private_vpc_connection
 }
