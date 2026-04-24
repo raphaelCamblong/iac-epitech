@@ -58,8 +58,14 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
         with:
-          terraform_version: 1.6.0
+          # 1.9.x bundles the current HashiCorp GPG key; 1.6.0 had the expired one.
+          terraform_version: 1.9.8
           terraform_wrapper: false
+
+      - name: Ensure plugin cache dir exists
+        # The ARC runner pod injects TF_PLUGIN_CACHE_DIR but the path isn't
+        # created on fresh pods. Pre-create whatever path Terraform will use.
+        run: mkdir -p "${TF_PLUGIN_CACHE_DIR:-$HOME/.terraform.d/plugin-cache}"
 
       - name: Terraform Init
         working-directory: ${{ steps.env.outputs.tf_dir }}
@@ -119,8 +125,14 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
         with:
-          terraform_version: 1.6.0
+          # 1.9.x bundles the current HashiCorp GPG key; 1.6.0 had the expired one.
+          terraform_version: 1.9.8
           terraform_wrapper: false
+
+      - name: Ensure plugin cache dir exists
+        # The ARC runner pod injects TF_PLUGIN_CACHE_DIR but the path isn't
+        # created on fresh pods. Pre-create whatever path Terraform will use.
+        run: mkdir -p "${TF_PLUGIN_CACHE_DIR:-$HOME/.terraform.d/plugin-cache}"
 
       - name: Terraform Init
         working-directory: ${{ needs.plan.outputs.tf_dir }}

@@ -55,21 +55,21 @@ variable "gke_release_channel" {
 
 variable "gke_cluster_location" {
   type        = string
-  default     = null
-  description = "Cluster location. null → regional cluster in var.region (full HA control plane, multi-AZ default pool). Set a zone (e.g. europe-west9-a) to fall back to a zonal cluster if regional capacity/quota is exhausted."
+  default     = "europe-west9-c"
+  description = "Zone for a zonal prod cluster (cheaper, faster to create, immune to cross-zone stockouts). Pinned to europe-west9-c so prod and dev live in different zones (dev is in -a). Set to null to fall back to a regional cluster in var.region when full HA is required."
   nullable    = true
 }
 
 variable "node_count" {
   type        = number
-  description = "GKE primary pool: nodes per zone. Prod uses all regional zones, so total VMs ≈ node_count × zone count (often three)."
+  description = "GKE primary pool: nodes per zone. With the zonal default, total VMs = node_count. Switch to regional (cluster_location=null) to multiply by the region's zone count."
   default     = 1
 }
 
 variable "gke_node_pool_max_count" {
   type        = number
-  description = "Max nodes per zone (autoscaling). Keeps total disks bounded: ≈ max × zones × node_disk_size_gb."
-  default     = 2
+  description = "Autoscaling ceiling per zone. With the zonal default, this is the absolute max worker count."
+  default     = 3
 }
 
 variable "node_machine_type" {
@@ -151,17 +151,17 @@ variable "image_tag" {
 
 variable "replica_count" {
   type    = number
-  default = 2
+  default = 1
 }
 
 variable "hpa_min_replicas" {
   type    = number
-  default = 2
+  default = 1
 }
 
 variable "hpa_max_replicas" {
   type    = number
-  default = 10
+  default = 3
 }
 
 variable "deploy_app" {
