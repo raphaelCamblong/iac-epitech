@@ -8,7 +8,7 @@ Production-ready Task Manager REST API built with Go, Clean Architecture, Postgr
 - PostgreSQL (CloudSQL, RDS, or local)
 - Docker (for building image)
 - Kubernetes cluster with Helm
-- Terraform (optional, for deployment)
+- Terraform 1.9+ (for deployment; CI pins 1.9.8)
 
 
 # [Deployment instructions](./DEPLOYMENTS.md)
