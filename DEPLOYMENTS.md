@@ -6,33 +6,74 @@ This document outlines the architecture and deployment processes for the Task Ma
 
 The following diagram illustrates the resources provisioned in Google Cloud Platform:
 
+Each environment is an **isolated replica** of the same stack in the same GCP project and region (`europe-west9`). Only the resource names, VPC CIDRs, and sizing differ.
+
 ```mermaid
-graph TD
-    subgraph GCP["Google Cloud Platform (GCP)"]
-        subgraph VPC["Virtual Private Cloud (VPC)"]
-            Subnet["GKE Subnet"]
-            PSA["Private Service Access"]
+flowchart TB
+    User["User / HTTP client"]
+    GH["GitHub Actions runner<br/>(App CI + Infra CD)"]
+
+    subgraph GCP["Google Cloud · project: epitech-iac-492216 · region: europe-west9"]
+        direction LR
+
+        subgraph Shared["Shared (project-scoped)"]
+            WIF["Workload Identity Federation<br/>github-actions-sa"]
+            STATE["GCS: Terraform state<br/>terraform-state-task-manager-{dev,prod}-492216"]
         end
-        GKE["Google Kubernetes Engine (GKE)"]
-        SQL["Cloud SQL (PostgreSQL 16)"]
-        AR["Artifact Registry"]
-        LB["TCP Load Balancer"]
+
+        subgraph DEV["Environment: dev — zonal"]
+            direction TB
+            DVPC["VPC task-manager-dev-vpc<br/>+ subnet + PSA peering"]
+            DIP["Regional static IP<br/>task-manager-dev-ingress-ip"]
+            DGKE["GKE task-manager-gke-dev<br/>zonal (europe-west9-a)<br/>e2-standard-2 · Workload Identity"]
+            DSQL["Cloud SQL Postgres 16<br/>task-manager-db-dev<br/>private IP only"]
+            DAR["Artifact Registry (Docker)<br/>task-manager-dev"]
+            DNGX["ingress-nginx<br/>(Helm, always on)"]
+            DAPP["task-manager Helm release<br/>(gated by deploy_app)"]
+        end
+
+        subgraph PROD["Environment: prod — regional"]
+            direction TB
+            PVPC["VPC task-manager-prod-vpc<br/>+ subnet + PSA peering"]
+            PIP["Regional static IP<br/>task-manager-prod-ingress-ip"]
+            PGKE["GKE task-manager-gke-prod<br/>regional (3-zone)<br/>e2-standard-2 · Workload Identity"]
+            PSQL["Cloud SQL Postgres 16<br/>task-manager-db-prod<br/>private IP only"]
+            PAR["Artifact Registry (Docker)<br/>task-manager-prod"]
+            PNGX["ingress-nginx<br/>(Helm, always on)"]
+            PAPP["task-manager Helm release<br/>(gated by deploy_app)"]
+        end
     end
 
-    User -->|HTTP via nip.io| LB
-    LB -->|Ingress Nginx| GKE
-    GKE -->|VPC Native| Subnet
-    GKE -->|Reads Images| AR
-    GKE -->|Private IP| SQL
-    SQL --- PSA
+    User -->|"HTTP · &lt;ip&gt;.nip.io"| DIP
+    User -->|"HTTP · &lt;ip&gt;.nip.io"| PIP
+    DIP --> DNGX --> DAPP
+    PIP --> PNGX --> PAPP
+    DAPP -->|"DB (private)"| DSQL
+    PAPP -->|"DB (private)"| PSQL
+    DGKE -.->|"pulls image"| DAR
+    PGKE -.->|"pulls image"| PAR
+    DAPP -.- DGKE
+    PAPP -.- PGKE
+    DNGX -.- DGKE
+    PNGX -.- PGKE
+    DSQL -.- DVPC
+    PSQL -.- PVPC
+    DGKE -.-|"VPC-native"| DVPC
+    PGKE -.-|"VPC-native"| PVPC
+
+    GH -->|"WIF auth"| WIF
+    GH -->|"terraform state"| STATE
+    GH -->|"docker push"| DAR
+    GH -->|"docker push"| PAR
 ```
 
-**Key Components:**
-- **VPC & Subnets:** Custom network with dedicated secondary ranges for Pods and Services.
-- **GKE:** A Kubernetes cluster using Workload Identity to securely interact with GCP services.
-- **Cloud SQL:** Private PostgreSQL database accessible only from the VPC via Private Services Access.
-- **Artifact Registry:** Dedicated Docker repository for storing application images.
-- **Ingress-Nginx:** Manages external traffic routing to the application services.
+**Key components (identical in both environments):**
+- **VPC + subnet + PSA peering:** Custom network with dedicated secondary ranges for Pods and Services, plus Private Service Access so Cloud SQL is reachable only over internal IP.
+- **GKE:** Kubernetes cluster using Workload Identity to reach Artifact Registry and Cloud SQL without static keys. Dev is **zonal** (cheaper, faster create, avoids cross-zone stockouts); prod is **regional** (HA control plane).
+- **Cloud SQL:** Private PostgreSQL 16, accessible only from the VPC via PSA.
+- **Artifact Registry:** Dedicated Docker repository per environment (`task-manager-dev`, `task-manager-prod`).
+- **ingress-nginx + static IP:** Traffic entry via a regional external IP. The Helm release deploys `ingress-nginx` which binds to that IP and routes `<ip>.nip.io` to the app.
+- **task-manager Helm release:** Gated by the `deploy_app` variable so first-time bootstrap can run before any image is pushed (see **§ 4**).
 
 ---
 
@@ -41,51 +82,44 @@ graph TD
 We use GitHub Actions to automate the continuous integration and continuous deployment processes.
 
 ```mermaid
-graph TD
-    Developer["Developer"]
+flowchart TB
+    Dev["Developer"]
+    Dev -->|"push / merge PR"| Branch{"Target branch?"}
 
-    subgraph GitFlow["Git Branches"]
-        Feature["feature/* branch"]
-        Develop["develop branch"]
-        Main["main branch"]
-    end
+    Branch -->|"feature/*"| CI_FT["App CI: lint + test"]
+    Branch -->|"develop"| CI_Dev["App CI: lint + test + build<br/>→ AR task-manager-dev:sha + :latest"]
+    Branch -->|"main"| CI_Main["App CI: lint + test + build<br/>→ AR task-manager-prod:sha + :latest"]
 
-    Developer -->|Push| Feature
-    Developer -->|Merge PR| Develop
-    Developer -->|Merge PR| Main
+    CI_FT -.->|"no deploy"| End1["stop"]
 
-    subgraph App_CI["App CI Workflow (app-ci.yml)"]
-        Lint["golangci-lint"]
-        Test["go test"]
-        Build["Docker Build & Push"]
-    end
+    CI_Dev -->|"workflow_run success"| CD_Plan_Dev["Infra CD — plan (dev)"]
+    CI_Main -->|"workflow_run success"| CD_Plan_Prod["Infra CD — plan (prod)"]
 
-    Feature --> Lint & Test
-    Develop -->|1. Test| Lint & Test
-    Main -->|1. Test| Lint & Test
+    CD_Plan_Dev --> CD_Apply_Dev["Infra CD — apply (dev)<br/>environment: dev (auto)"]
+    CD_Plan_Prod --> Gate{{"GitHub Environment: prod<br/>Required reviewers approve"}}
+    Gate -->|"approved"| CD_Apply_Prod["Infra CD — apply (prod)"]
 
-    Lint & Test -->|2. If develop/main| Build
+    CD_Apply_Dev --> LT_Dev["Locust load test"]
+    CD_Apply_Prod --> LT_Prod["Locust load test"]
 
-    subgraph Infra_CD["Infra CD Workflow (infra-cd.yml)"]
-        Plan["terraform plan"]
-        Apply_Dev["terraform apply (dev)"]
-        Manual["Manual Approval Gate"]
-        Apply_Prod["terraform apply (prod)"]
-        Locust["Locust Load Test"]
-    end
-
-    Build -->|3. Trigger workflow_run| Plan
-    Plan -->|4a. If develop| Apply_Dev
-    Apply_Dev -->|5. Validate| Locust
-
-    Plan -->|4b. If main| Manual
-    Manual --> Apply_Prod
-    Apply_Prod -->|5. Validate| Locust
+    classDef gate fill:#fff4cd,stroke:#b78103,stroke-width:2px,color:#000
+    class Gate gate
 ```
 
-### Pipelines Breakdown
-- **App CI (`app-ci.yml`)**: Unconditionally runs the Go linter and unit tests. If the branch is `develop` or `main`, it builds the Docker image and pushes it to Artifact Registry tagged with the Git SHA.
-- **Infra CD (`infra-cd.yml`)**: Triggered upon App CI success. It dynamically targets the Terraform `dev` or `prod` environment. For `prod`, it pauses for manual approval via GitHub Environments. On successful deployment, it executes a Locust load test.
+### Pipelines breakdown
+- **App CI (`app-ci.yml`)** — runs `golangci-lint` and `go test -race` on every push. On `develop` or `main`, it also builds a Docker image and pushes two tags to the environment-matching Artifact Registry repo: `:<sha>` (immutable) and `:latest`.
+- **Infra CD (`infra-cd.yml`)** — triggered via `workflow_run` when App CI succeeds on `develop` or `main`. Split into three jobs:
+  1. **`plan`** — runs `terraform init` + `validate` + `plan` and prints the plan to the job log. Always runs; no approval needed.
+  2. **`apply`** — gated by a GitHub **Environment** (`dev` or `prod`). For `prod`, the `Required reviewers` protection rule holds the job until a listed reviewer approves in the GitHub UI — the approver can inspect the plan output from step 1 before saying yes. For `dev` the environment has no reviewers, so it proceeds automatically.
+  3. **`load-test`** — runs Locust against the ingress URL emitted by the apply job.
+
+### Manual approval for `main` — how it's enforced
+1. The `apply` job declares `environment: prod` when the source branch is `main`.
+2. GitHub inspects the `prod` Environment's protection rules.
+3. Because `prod` has `Required reviewers` configured (see **§ 3.D**), the job enters a `Waiting` state with a **Review deployments** button. Only listed reviewers can approve or reject.
+4. Only after an approval does the `apply` job run `terraform apply`.
+
+**If the `prod` Environment is not configured in the repository settings, there is no gate** — GitHub will run the apply immediately. Confirm that § 3.D has been completed before pushing to `main`.
 
 ---
 
@@ -166,15 +200,19 @@ cp infrastructure/environments/prod/terraform.tfvars.example infrastructure/envi
 
 ## 4. Bootstrapping the Infrastructure (First Time Deployment)
 
-Because the CI/CD pipeline pushes Docker images to Artifact Registry, and the CD pipeline relies on self-hosted runners (ARC) inside the GKE cluster, there is a "Chicken and the Egg" dependency cycle. To resolve this, you must run Terraform locally for the very first deployment.
+Because the CI/CD pipeline pushes Docker images to Artifact Registry, and the CD pipeline relies on self-hosted runners (ARC) inside the GKE cluster, there is a "Chicken and the Egg" dependency cycle — the first `terraform apply` cannot deploy the `task-manager` Helm release because its container image does not exist yet. The Helm provider runs with `wait = true`, so the release would hang on `ImagePullBackOff` until it times out and fails the apply.
+
+To resolve this, the Helm module exposes a **`deploy_app`** boolean variable (default `true`). On the very first apply, set it to `false` to install every piece of infrastructure except the application release. Once CI has pushed an image to Artifact Registry, flip it back to `true` (the default) and let the CD pipeline take over.
+
+> `ingress-nginx` is still installed during bootstrap — it uses a public chart and reserves the Load Balancer on the pre-allocated static IP, so traffic routing is ready as soon as the app is deployed.
 
 ### A. Configure GitHub Secrets
 Navigate to your repository **Settings > Secrets and variables > Actions > Secrets** and click **New repository secret** to add:
 - `JWT_SECRET`: Your application's JWT signature secret.
 - `PAT`: A GitHub Personal Access Token (classic) with `repo` permissions to allow the ARC runners to register.
 
-### B. Deploy Core Infrastructure Locally
-Deploy only the foundational infrastructure (Network, GKE, Database, Artifact Registry, and ARC). We specifically skip the `helm` module (which deploys your application) because the Docker image hasn't been built and pushed to the registry yet.
+### B. Deploy Core Infrastructure Locally (bootstrap with `deploy_app=false`)
+Run Terraform with `deploy_app=false` to install Network, GKE, Database, Artifact Registry, ARC, and `ingress-nginx` — but skip the `task-manager` Helm release and its Kubernetes secret.
 
 ```bash
 cd infrastructure/environments/dev
@@ -182,13 +220,9 @@ cd infrastructure/environments/dev
 # Initialize Terraform
 terraform init
 
-# Save the plan to a file to guarantee apply executes exactly what was reviewed
-terraform plan -target=module.network \
-               -target=module.database \
-               -target=module.gke \
-               -target=module.artifact_registry \
-               -target=module.arc \
-               -var="github_pat=YOUR_GITHUB_PAT" \
+# Save a plan that skips the task-manager release
+terraform plan -var="deploy_app=false" \
+               -var="github_pat=YOUR_GITHUB_PAT" \ #or set it in variable.tf
                -out=bootstrap.tfplan
 
 # Apply that exact plan file
@@ -198,21 +232,25 @@ terraform apply "bootstrap.tfplan"
 cd ../prod
 terraform init
 
-# Save the plan to a file to guarantee apply executes exactly what was reviewed
-terraform plan -target=module.network \
-               -target=module.database \
-               -target=module.gke \
-               -target=module.artifact_registry \
-               -target=module.arc \
+terraform plan -var="deploy_app=false" \
                -var="github_pat=YOUR_GITHUB_PAT" \
                -out=bootstrap.tfplan
 
-# Apply that exact plan file
 terraform apply "bootstrap.tfplan"
 ```
+
+After this step:
+- GKE is running with the primary node pool ready to receive workloads.
+- Cloud SQL is reachable privately over the VPC.
+- Artifact Registry exists (empty).
+- `ingress-nginx` is installed and bound to the reserved static IP.
+- ARC runners are registered with GitHub and able to execute workflows on GKE.
+- The `task-manager` Deployment, Service, Ingress, and Secret are **not** created yet.
 
 ### C. Trigger the CI/CD Pipeline
 Now that the Artifact Registries and ARC Runners exist and are active in both environments:
 1. Commit and push your code to GitHub (`main` or `develop` branches).
 2. The `app-ci.yml` workflow will now successfully build and push the first Docker image into Artifact Registry.
-3. The `infra-cd.yml` workflow will automatically trigger, run on your self-hosted GKE runners, and apply the complete Terraform state (deploying the database credentials and the `helm` application module).
+3. The `infra-cd.yml` workflow automatically triggers on the App CI success, runs on your self-hosted GKE runners, and applies the complete Terraform state. Because `deploy_app` now falls back to its default value (`true`), the `helm` module installs the `task-manager` release against the image that was just pushed, and the application becomes reachable at `http://<ingress_static_ip>.nip.io`.
+
+> If you later need to re-bootstrap (e.g. after a full `terraform destroy` or when onboarding a new GCP project), repeat **4.B** — no source changes required.
