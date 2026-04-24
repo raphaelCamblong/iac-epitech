@@ -34,11 +34,16 @@ resource "google_sql_database_instance" "main" {
   depends_on = [
     var.private_service_networking_connection,
   ]
+
+  timeouts {
+    delete = "60m"
+  }
 }
 
 resource "google_sql_database" "app" {
   name     = var.db_name
   instance = google_sql_database_instance.main.name
+  depends_on = [google_sql_user.app]
 }
 
 resource "google_sql_user" "app" {

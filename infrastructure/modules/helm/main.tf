@@ -29,7 +29,7 @@ resource "helm_release" "ingress_nginx" {
 }
 
 resource "kubernetes_namespace" "task_manager" {
-  count = var.namespace == "default" ? 0 : 1
+  count = var.deploy_app && var.namespace != "default" ? 1 : 0
 
   metadata {
     name = var.namespace
@@ -37,6 +37,8 @@ resource "kubernetes_namespace" "task_manager" {
 }
 
 resource "kubernetes_secret" "app_secrets" {
+  count = var.deploy_app ? 1 : 0
+
   metadata {
     name      = "${var.release_name}-secrets"
     namespace = var.namespace
@@ -53,6 +55,8 @@ resource "kubernetes_secret" "app_secrets" {
 }
 
 resource "helm_release" "task_manager" {
+  count = var.deploy_app ? 1 : 0
+
   name      = var.release_name
   chart     = "${path.module}/../../../charts/task-manager"
   namespace = var.namespace
@@ -61,7 +65,7 @@ resource "helm_release" "task_manager" {
 
   values = [
     templatefile("${path.module}/task-manager-overrides.yaml.tftpl", {
-      existing_secret  = kubernetes_secret.app_secrets.metadata[0].name
+      existing_secret  = kubernetes_secret.app_secrets[0].metadata[0].name
       image_repository = var.image_repository
       image_tag        = var.image_tag
       replica_count    = var.replica_count

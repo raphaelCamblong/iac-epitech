@@ -3,5 +3,5 @@ output "ingress_nginx_status" {
 }
 
 output "task_manager_status" {
-  value = helm_release.task_manager.status
+  value = try(helm_release.task_manager[0].status, "not deployed")
 }

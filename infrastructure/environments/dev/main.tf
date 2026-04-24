@@ -45,6 +45,7 @@ module "gke" {
 
   project_id                    = var.project_id
   region                        = var.region
+  cluster_location              = var.gke_cluster_location
   name_prefix                   = "${var.name_prefix}-dev"
   cluster_name                  = "${var.name_prefix}-gke-dev"
   network_id                    = module.network.network_id
@@ -113,6 +114,7 @@ module "helm" {
   replica_count     = var.replica_count
   hpa_min_replicas  = var.hpa_min_replicas
   hpa_max_replicas  = var.hpa_max_replicas
+  deploy_app        = var.deploy_app
 }
 
 # ARC Module

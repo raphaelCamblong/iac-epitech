@@ -133,3 +133,16 @@ func TestHandler_Update_Conflict(t *testing.T) {
 	r.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusConflict, rr.Code)
 }
+
+func TestHandler_Delete_InvalidBody(t *testing.T) {
+	h := NewHandler(&mockTaskUseCase{})
+	r := chi.NewRouter()
+	r.Route("/tasks", func(r chi.Router) {
+		r.With(authCtx("u1", "a@b.com")).Delete("/{id}", h.Delete)
+	})
+	req := httptest.NewRequest("DELETE", "/tasks/t1", bytes.NewReader([]byte("not-json")))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+}
