@@ -53,6 +53,13 @@ variable "gke_release_channel" {
   default = "STABLE"
 }
 
+variable "gke_cluster_location" {
+  type        = string
+  default     = null
+  description = "Cluster location. null → regional cluster in var.region (full HA control plane, multi-AZ default pool). Set a zone (e.g. europe-west9-a) to fall back to a zonal cluster if regional capacity/quota is exhausted."
+  nullable    = true
+}
+
 variable "node_count" {
   type        = number
   description = "GKE primary pool: nodes per zone. Prod uses all regional zones, so total VMs ≈ node_count × zone count (often three)."
@@ -155,4 +162,10 @@ variable "hpa_min_replicas" {
 variable "hpa_max_replicas" {
   type    = number
   default = 10
+}
+
+variable "deploy_app" {
+  type        = bool
+  default     = true
+  description = "Whether to install the task-manager Helm release. Set to false (via tfvars or -var) on the very first apply, before CI has pushed an image to Artifact Registry. Once an image exists, flip to true (the default) for normal CD runs."
 }

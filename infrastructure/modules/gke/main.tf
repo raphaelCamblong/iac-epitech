@@ -22,7 +22,7 @@ resource "google_project_iam_member" "gke_nodes" {
 
 resource "google_container_cluster" "main" {
   name     = var.cluster_name
-  location = var.region
+  location = var.cluster_location != null ? var.cluster_location : var.region
 
   network    = var.network_id
   subnetwork = var.subnetwork_id
@@ -59,6 +59,12 @@ resource "google_container_cluster" "main" {
     ignore_changes = [
       node_config,
     ]
+  }
+
+  timeouts {
+    create = "40m"
+    update = "40m"
+    delete = "40m"
   }
 }
 

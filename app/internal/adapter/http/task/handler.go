@@ -2,7 +2,6 @@ package task
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"time"
 
@@ -11,9 +10,7 @@ import (
 	appHttp "github.com/task-manager/api/internal/adapter/http"
 	"github.com/task-manager/api/internal/adapter/http/middleware"
 	"github.com/task-manager/api/internal/entity"
-	"github.com/task-manager/api/internal/port"
 	"github.com/task-manager/api/internal/usecase/task"
-	"github.com/task-manager/api/pkg/validator"
 )
 
 // UseCase defines the task operations needed by Handler.
@@ -78,30 +75,49 @@ func toTaskResponse(t *entity.Task) TaskResponse {
 	}
 }
 
+func userOr401(w http.ResponseWriter, r *http.Request) (*middleware.UserInfo, bool) {
+	u := middleware.UserFromContext(r.Context())
+	if u == nil {
+		appHttp.Error(w, http.StatusUnauthorized, "unauthorized")
+		return nil, false
+	}
+	return u, true
+}
+
+func parseDueDate(w http.ResponseWriter, s string) (time.Time, bool) {
+	d, err := time.Parse("2006-01-02", s)
+	if err != nil {
+		appHttp.Error(w, http.StatusBadRequest, "invalid due_date format")
+		return time.Time{}, false
+	}
+	return d, true
+}
+
+func parseRequestTimestamp(w http.ResponseWriter, s string) (time.Time, bool) {
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		appHttp.Error(w, http.StatusBadRequest, "invalid request_timestamp format")
+		return time.Time{}, false
+	}
+	return t, true
+}
+
 // Create handles POST /tasks.
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
-	user := middleware.UserFromContext(r.Context())
-	if user == nil {
-		appHttp.Error(w, http.StatusUnauthorized, "unauthorized")
+	user, ok := userOr401(w, r)
+	if !ok {
 		return
 	}
 	var req CreateTaskRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		appHttp.Error(w, http.StatusBadRequest, "invalid request body")
+	if !appHttp.ReadAndValidateJSON(w, r, &req) {
 		return
 	}
-	if err := validator.Validate(&req); err != nil {
-		appHttp.Error(w, http.StatusBadRequest, "validation failed: "+err.Error())
+	dueDate, ok := parseDueDate(w, req.DueDate)
+	if !ok {
 		return
 	}
-	dueDate, err := time.Parse("2006-01-02", req.DueDate)
-	if err != nil {
-		appHttp.Error(w, http.StatusBadRequest, "invalid due_date format")
-		return
-	}
-	reqTs, err := time.Parse(time.RFC3339, req.RequestTimestamp)
-	if err != nil {
-		appHttp.Error(w, http.StatusBadRequest, "invalid request_timestamp format")
+	reqTs, ok := parseRequestTimestamp(w, req.RequestTimestamp)
+	if !ok {
 		return
 	}
 	created, err := h.taskUC.Create(r.Context(), user.UserID, task.TaskInput{
@@ -119,9 +135,8 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 
 // List handles GET /tasks.
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
-	user := middleware.UserFromContext(r.Context())
-	if user == nil {
-		appHttp.Error(w, http.StatusUnauthorized, "unauthorized")
+	user, ok := userOr401(w, r)
+	if !ok {
 		return
 	}
 	tasks, err := h.taskUC.List(r.Context(), user.UserID)
@@ -138,16 +153,14 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 // Get handles GET /tasks/{id}.
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
-	user := middleware.UserFromContext(r.Context())
-	if user == nil {
-		appHttp.Error(w, http.StatusUnauthorized, "unauthorized")
+	user, ok := userOr401(w, r)
+	if !ok {
 		return
 	}
 	id := chi.URLParam(r, "id")
 	task, err := h.taskUC.Get(r.Context(), user.UserID, id)
 	if err != nil {
-		if err == port.ErrNotFound {
-			appHttp.Error(w, http.StatusNotFound, "task not found")
+		if appHttp.WritePortError(w, err) {
 			return
 		}
 		appHttp.Error(w, http.StatusInternalServerError, "internal server error")
@@ -158,24 +171,17 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 // Update handles PUT /tasks/{id}.
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
-	user := middleware.UserFromContext(r.Context())
-	if user == nil {
-		appHttp.Error(w, http.StatusUnauthorized, "unauthorized")
+	user, ok := userOr401(w, r)
+	if !ok {
 		return
 	}
 	id := chi.URLParam(r, "id")
 	var req UpdateTaskRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		appHttp.Error(w, http.StatusBadRequest, "invalid request body")
+	if !appHttp.ReadAndValidateJSON(w, r, &req) {
 		return
 	}
-	if err := validator.Validate(&req); err != nil {
-		appHttp.Error(w, http.StatusBadRequest, "validation failed: "+err.Error())
-		return
-	}
-	reqTs, err := time.Parse(time.RFC3339, req.RequestTimestamp)
-	if err != nil {
-		appHttp.Error(w, http.StatusBadRequest, "invalid request_timestamp format")
+	reqTs, ok := parseRequestTimestamp(w, req.RequestTimestamp)
+	if !ok {
 		return
 	}
 	in := task.TaskUpdateInput{RequestTimestamp: reqTs}
@@ -186,9 +192,8 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		in.Content = req.Content
 	}
 	if req.DueDate != nil {
-		d, err := time.Parse("2006-01-02", *req.DueDate)
-		if err != nil {
-			appHttp.Error(w, http.StatusBadRequest, "invalid due_date format")
+		d, ok := parseDueDate(w, *req.DueDate)
+		if !ok {
 			return
 		}
 		in.DueDate = &d
@@ -198,12 +203,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	t, err := h.taskUC.Update(r.Context(), user.UserID, id, in)
 	if err != nil {
-		if err == port.ErrNotFound {
-			appHttp.Error(w, http.StatusNotFound, "task not found")
-			return
-		}
-		if err == port.ErrConflict {
-			appHttp.Error(w, http.StatusConflict, "timestamp or concurrency conflict")
+		if appHttp.WritePortError(w, err) {
 			return
 		}
 		appHttp.Error(w, http.StatusInternalServerError, "internal server error")
@@ -214,31 +214,22 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /tasks/{id}.
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
-	user := middleware.UserFromContext(r.Context())
-	if user == nil {
-		appHttp.Error(w, http.StatusUnauthorized, "unauthorized")
+	user, ok := userOr401(w, r)
+	if !ok {
 		return
 	}
 	id := chi.URLParam(r, "id")
 	var req DeleteTaskRequest
-	_ = json.NewDecoder(r.Body).Decode(&req)
-	if err := validator.Validate(&req); err != nil {
-		appHttp.Error(w, http.StatusBadRequest, "validation failed: "+err.Error())
+	if !appHttp.ReadAndValidateJSON(w, r, &req) {
 		return
 	}
-	reqTs, err := time.Parse(time.RFC3339, req.RequestTimestamp)
-	if err != nil {
-		appHttp.Error(w, http.StatusBadRequest, "invalid request_timestamp format")
+	reqTs, ok := parseRequestTimestamp(w, req.RequestTimestamp)
+	if !ok {
 		return
 	}
-	err = h.taskUC.Delete(r.Context(), user.UserID, id, reqTs)
+	err := h.taskUC.Delete(r.Context(), user.UserID, id, reqTs)
 	if err != nil {
-		if err == port.ErrNotFound {
-			appHttp.Error(w, http.StatusNotFound, "task not found")
-			return
-		}
-		if err == port.ErrConflict {
-			appHttp.Error(w, http.StatusConflict, "timestamp or concurrency conflict")
+		if appHttp.WritePortError(w, err) {
 			return
 		}
 		appHttp.Error(w, http.StatusInternalServerError, "internal server error")

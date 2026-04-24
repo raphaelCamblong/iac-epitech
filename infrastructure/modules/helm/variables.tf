@@ -57,3 +57,9 @@ variable "hpa_max_replicas" {
   type    = number
   default = 5
 }
+
+variable "deploy_app" {
+  type        = bool
+  default     = true
+  description = "Install the task-manager Helm release and its secret. Set to false on the first-ever apply (bootstrap), before CI has pushed an image to Artifact Registry, to avoid helm_release hanging on ImagePullBackOff. Flip back to true for normal CD runs."
+}

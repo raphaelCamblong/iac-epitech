@@ -2,15 +2,12 @@ package auth
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 
 	apphttp "github.com/task-manager/api/internal/adapter/http"
 	"github.com/task-manager/api/internal/entity"
-	"github.com/task-manager/api/internal/port"
 	"github.com/task-manager/api/internal/usecase/auth"
 	"github.com/task-manager/api/pkg/jwtauth"
-	"github.com/task-manager/api/pkg/validator"
 )
 
 // UseCase defines auth operations needed by Handler.
@@ -47,15 +44,20 @@ type AuthResponse struct {
 	Token string `json:"token"`
 }
 
+func (h *Handler) respondWithToken(w http.ResponseWriter, user *entity.User, status int) bool {
+	token, err := h.signer.Sign(user.ID, user.Email)
+	if err != nil {
+		apphttp.Error(w, http.StatusInternalServerError, "internal server error")
+		return false
+	}
+	apphttp.JSON(w, status, AuthResponse{Token: token})
+	return true
+}
+
 // Register handles POST /auth/register.
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	var req RegisterRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		apphttp.Error(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-	if err := validator.Validate(&req); err != nil {
-		apphttp.Error(w, http.StatusBadRequest, "validation failed: "+err.Error())
+	if !apphttp.ReadAndValidateJSON(w, r, &req) {
 		return
 	}
 	user, err := h.authUC.Register(r.Context(), auth.AuthInput{
@@ -63,30 +65,18 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		Password: req.Password,
 	})
 	if err != nil {
-		if err == port.ErrDuplicateUser {
-			apphttp.Error(w, http.StatusConflict, "user already exists")
-			return
+		if !apphttp.WritePortError(w, err) {
+			apphttp.Error(w, http.StatusInternalServerError, "internal server error")
 		}
-		apphttp.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
-	token, err := h.signer.Sign(user.ID, user.Email)
-	if err != nil {
-		apphttp.Error(w, http.StatusInternalServerError, "internal server error")
-		return
-	}
-	apphttp.JSON(w, http.StatusCreated, AuthResponse{Token: token})
+	h.respondWithToken(w, user, http.StatusCreated)
 }
 
 // Login handles POST /auth/login.
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		apphttp.Error(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-	if err := validator.Validate(&req); err != nil {
-		apphttp.Error(w, http.StatusBadRequest, "validation failed: "+err.Error())
+	if !apphttp.ReadAndValidateJSON(w, r, &req) {
 		return
 	}
 	user, err := h.authUC.Login(r.Context(), auth.AuthInput{
@@ -94,17 +84,10 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		Password: req.Password,
 	})
 	if err != nil {
-		if err == port.ErrUnauthorized {
-			apphttp.Error(w, http.StatusUnauthorized, "invalid credentials")
-			return
+		if !apphttp.WritePortError(w, err) {
+			apphttp.Error(w, http.StatusInternalServerError, "internal server error")
 		}
-		apphttp.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
-	token, err := h.signer.Sign(user.ID, user.Email)
-	if err != nil {
-		apphttp.Error(w, http.StatusInternalServerError, "internal server error")
-		return
-	}
-	apphttp.JSON(w, http.StatusOK, AuthResponse{Token: token})
+	h.respondWithToken(w, user, http.StatusOK)
 }

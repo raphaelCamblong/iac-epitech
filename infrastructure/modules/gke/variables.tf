@@ -6,6 +6,13 @@ variable "region" {
   type = string
 }
 
+variable "cluster_location" {
+  type        = string
+  default     = null
+  description = "Cluster location. Zone (e.g. europe-west9-a) → zonal cluster (1 control plane, default pool = initial_node_count VMs). null → regional cluster in var.region (3 control planes, default pool = initial_node_count × 3 VMs, needs capacity in every zone)."
+  nullable    = true
+}
+
 variable "name_prefix" {
   type = string
 }

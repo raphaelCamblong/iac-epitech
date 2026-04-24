@@ -53,6 +53,13 @@ variable "gke_release_channel" {
   default = "REGULAR"
 }
 
+variable "gke_cluster_location" {
+  type        = string
+  default     = "europe-west9-a"
+  description = "Zone for a zonal dev cluster (cheaper, faster to create, immune to cross-zone stockouts). Set to null to fall back to the regional cluster in var.region."
+  nullable    = true
+}
+
 variable "node_count" {
   type        = number
   default     = 1
@@ -135,4 +142,10 @@ variable "hpa_min_replicas" {
 variable "hpa_max_replicas" {
   type    = number
   default = 3
+}
+
+variable "deploy_app" {
+  type        = bool
+  default     = true
+  description = "Whether to install the task-manager Helm release. Set to false (via tfvars or -var) on the very first apply, before CI has pushed an image to Artifact Registry. Once an image exists, flip to true (the default) for normal CD runs."
 }

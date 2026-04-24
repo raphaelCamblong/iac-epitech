@@ -34,7 +34,7 @@ resource "google_service_networking_connection" "private_vpc_connection" {
   reserved_peering_ranges = [google_compute_global_address.private_service_access.name]
 
   timeouts {
-    delete = "30m"
+    delete = "60m"
   }
 }
 
