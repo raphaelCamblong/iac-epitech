@@ -7,19 +7,26 @@ on:
       - completed
 
 jobs:
-  deploy:
-    name: Deploy Infrastructure
+  # ──────────────────────────────────────────────────────────────────────────
+  # Plan — runs unconditionally on App CI success for develop or main.
+  # Prints terraform plan to the job log so reviewers can inspect it before
+  # the apply job is approved (for prod).
+  # ──────────────────────────────────────────────────────────────────────────
+  plan:
+    name: Terraform Plan
     runs-on: arc-runner-set
     if: ${{ github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'develop') }}
 
-    environment:
-      name: ${{ github.event.workflow_run.head_branch == 'main' && 'prod' || 'dev' }}
+    outputs:
+      env_name: ${{ steps.env.outputs.name }}
+      tf_dir: ${{ steps.env.outputs.tf_dir }}
 
     permissions:
       contents: read
       id-token: write
 
     env:
+      TF_IN_AUTOMATION: "true"
       TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
       TF_VAR_image_tag: ${{ github.event.workflow_run.head_sha }}
       TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
@@ -31,23 +38,16 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
-      - name: Configure Terraform environment
+      - name: Determine environment
+        id: env
         run: |
-          echo "TF_IN_AUTOMATION=true" >> "$GITHUB_ENV"
-          echo "TF_PLUGIN_CACHE_DIR=${HOME}/.terraform.d/plugin-cache" >> "$GITHUB_ENV"
           if [[ "${{ github.event.workflow_run.head_branch }}" == "main" ]]; then
-            echo "TF_DIR=infrastructure/environments/prod" >> "$GITHUB_ENV"
+            echo "name=prod" >> "$GITHUB_OUTPUT"
+            echo "tf_dir=infrastructure/environments/prod" >> "$GITHUB_OUTPUT"
           else
-            echo "TF_DIR=infrastructure/environments/dev" >> "$GITHUB_ENV"
+            echo "name=dev" >> "$GITHUB_OUTPUT"
+            echo "tf_dir=infrastructure/environments/dev" >> "$GITHUB_OUTPUT"
           fi
-
-      - name: Cache Terraform providers
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.TF_PLUGIN_CACHE_DIR }}
-          key: ${{ runner.os }}-terraform-plugins-${{ hashFiles('infrastructure/**/.terraform.lock.hcl') }}
-          restore-keys: |
-            ${{ runner.os }}-terraform-plugins-
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3
@@ -58,30 +58,110 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
         with:
-          terraform_version: 1.6.0
+          # 1.9.x bundles the current HashiCorp GPG key; 1.6.0 had the expired one.
+          terraform_version: 1.9.8
           terraform_wrapper: false
 
+      - name: Ensure plugin cache dir exists
+        # The ARC runner pod injects TF_PLUGIN_CACHE_DIR but the path isn't
+        # created on fresh pods. Pre-create whatever path Terraform will use.
+        run: mkdir -p "${TF_PLUGIN_CACHE_DIR:-$HOME/.terraform.d/plugin-cache}"
+
       - name: Terraform Init
-        working-directory: ${{ env.TF_DIR }}
+        working-directory: ${{ steps.env.outputs.tf_dir }}
         run: terraform init -input=false
 
       - name: Terraform Validate
-        working-directory: ${{ env.TF_DIR }}
+        working-directory: ${{ steps.env.outputs.tf_dir }}
         run: terraform validate
 
       - name: Terraform Plan
-        working-directory: ${{ env.TF_DIR }}
-        run: terraform plan -no-color -input=false -out=tfplan
+        working-directory: ${{ steps.env.outputs.tf_dir }}
+        run: terraform plan -no-color -input=false
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Apply — gated by the GitHub Environment (dev | prod).
+  #   - dev  : no protection rules → proceeds automatically.
+  #   - prod : Required reviewers must approve before this job runs
+  #            (see DEPLOYMENTS.md § 3.D).
+  # Re-runs terraform against the live state so the applied changes are
+  # consistent with what is in the backend at approval time.
+  # ──────────────────────────────────────────────────────────────────────────
+  apply:
+    name: Terraform Apply (${{ needs.plan.outputs.env_name }})
+    needs: plan
+    runs-on: arc-runner-set
+
+    environment:
+      name: ${{ needs.plan.outputs.env_name }}
+      url: ${{ steps.url.outputs.ingress_url }}
+
+    outputs:
+      ingress_url: ${{ steps.url.outputs.ingress_url }}
+
+    permissions:
+      contents: read
+      id-token: write
+
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
+      TF_VAR_image_tag: ${{ github.event.workflow_run.head_sha }}
+      TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
+      TF_VAR_github_pat: ${{ secrets.PAT }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: 'projects/${{ vars.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider'
+          service_account: 'github-actions-sa@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com'
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          # 1.9.x bundles the current HashiCorp GPG key; 1.6.0 had the expired one.
+          terraform_version: 1.9.8
+          terraform_wrapper: false
+
+      - name: Ensure plugin cache dir exists
+        # The ARC runner pod injects TF_PLUGIN_CACHE_DIR but the path isn't
+        # created on fresh pods. Pre-create whatever path Terraform will use.
+        run: mkdir -p "${TF_PLUGIN_CACHE_DIR:-$HOME/.terraform.d/plugin-cache}"
+
+      - name: Terraform Init
+        working-directory: ${{ needs.plan.outputs.tf_dir }}
+        run: terraform init -input=false
 
       - name: Terraform Apply
-        working-directory: ${{ env.TF_DIR }}
-        run: terraform apply -no-color -input=false -auto-approve tfplan
+        working-directory: ${{ needs.plan.outputs.tf_dir }}
+        run: terraform apply -no-color -input=false -auto-approve
 
       - name: Get Ingress URL
-        working-directory: ${{ env.TF_DIR }}
-        run: echo "URL=$(terraform output -raw ingress_url)" >> "$GITHUB_ENV"
+        id: url
+        working-directory: ${{ needs.plan.outputs.tf_dir }}
+        run: echo "ingress_url=$(terraform output -raw ingress_url)" >> "$GITHUB_OUTPUT"
 
-      - name: Setup Python (for Locust)
+  # ──────────────────────────────────────────────────────────────────────────
+  # Load test — smoke Locust against the newly deployed ingress URL.
+  # ──────────────────────────────────────────────────────────────────────────
+  load-test:
+    name: Locust Load Test
+    needs: apply
+    runs-on: arc-runner-set
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup Python
         uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -97,4 +177,4 @@ jobs:
           -u 10
           -r 2
           --run-time 1m
-          --host ${{ env.URL }}
+          --host ${{ needs.apply.outputs.ingress_url }}
