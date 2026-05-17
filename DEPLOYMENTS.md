@@ -4,68 +4,19 @@ This document outlines the architecture and deployment processes for the Task Ma
 
 ## 1. GCP Infrastructure Architecture
 
-The following diagram illustrates the resources provisioned in Google Cloud Platform:
-
 Each environment is an **isolated replica** of the same stack in the same GCP project and region (`europe-west9`). Only the resource names, VPC CIDRs, and sizing differ.
 
-```mermaid
-flowchart TB
-    User["User / HTTP client"]
-    GH["GitHub Actions runner<br/>(App CI + Infra CD)"]
+### Dev — zonal GKE in `europe-west9-a`
 
-    subgraph GCP["Google Cloud · project: epitech-iac-492216 · region: europe-west9"]
-        direction LR
+![Dev environment infrastructure](docs/infra-dev.png)
 
-        subgraph Shared["Shared (project-scoped)"]
-            WIF["Workload Identity Federation<br/>github-actions-sa"]
-            STATE["GCS: Terraform state<br/>terraform-state-task-manager-{dev,prod}-492216"]
-        end
+<sub>Source: [`docs/infra-dev.html`](docs/infra-dev.html) — open in a browser for the interactive version.</sub>
 
-        subgraph DEV["Environment: dev — zonal"]
-            direction TB
-            DVPC["VPC task-manager-dev-vpc<br/>+ subnet + PSA peering"]
-            DIP["Regional static IP<br/>task-manager-dev-ingress-ip"]
-            DGKE["GKE task-manager-gke-dev<br/>zonal (europe-west9-a)<br/>e2-standard-2 · Workload Identity"]
-            DSQL["Cloud SQL Postgres 16<br/>task-manager-db-dev<br/>private IP only"]
-            DAR["Artifact Registry (Docker)<br/>task-manager-dev"]
-            DNGX["ingress-nginx<br/>(Helm, always on)"]
-            DAPP["task-manager Helm release<br/>(gated by deploy_app)"]
-        end
+### Prod — regional GKE across 3 zones (HA, manual approval gate)
 
-        subgraph PROD["Environment: prod — regional"]
-            direction TB
-            PVPC["VPC task-manager-prod-vpc<br/>+ subnet + PSA peering"]
-            PIP["Regional static IP<br/>task-manager-prod-ingress-ip"]
-            PGKE["GKE task-manager-gke-prod<br/>regional (3-zone)<br/>e2-standard-2 · Workload Identity"]
-            PSQL["Cloud SQL Postgres 16<br/>task-manager-db-prod<br/>private IP only"]
-            PAR["Artifact Registry (Docker)<br/>task-manager-prod"]
-            PNGX["ingress-nginx<br/>(Helm, always on)"]
-            PAPP["task-manager Helm release<br/>(gated by deploy_app)"]
-        end
-    end
+![Prod environment infrastructure](docs/infra-prod.png)
 
-    User -->|"HTTP · &lt;ip&gt;.nip.io"| DIP
-    User -->|"HTTP · &lt;ip&gt;.nip.io"| PIP
-    DIP --> DNGX --> DAPP
-    PIP --> PNGX --> PAPP
-    DAPP -->|"DB (private)"| DSQL
-    PAPP -->|"DB (private)"| PSQL
-    DGKE -.->|"pulls image"| DAR
-    PGKE -.->|"pulls image"| PAR
-    DAPP -.- DGKE
-    PAPP -.- PGKE
-    DNGX -.- DGKE
-    PNGX -.- PGKE
-    DSQL -.- DVPC
-    PSQL -.- PVPC
-    DGKE -.-|"VPC-native"| DVPC
-    PGKE -.-|"VPC-native"| PVPC
-
-    GH -->|"WIF auth"| WIF
-    GH -->|"terraform state"| STATE
-    GH -->|"docker push"| DAR
-    GH -->|"docker push"| PAR
-```
+<sub>Source: [`docs/infra-prod.html`](docs/infra-prod.html) — open in a browser for the interactive version.</sub>
 
 **Key components (identical in both environments):**
 - **VPC + subnet + PSA peering:** Custom network with dedicated secondary ranges for Pods and Services, plus Private Service Access so Cloud SQL is reachable only over internal IP.
@@ -74,37 +25,23 @@ flowchart TB
 - **Artifact Registry:** Dedicated Docker repository per environment (`task-manager-dev`, `task-manager-prod`).
 - **ingress-nginx + static IP:** Traffic entry via a regional external IP. The Helm release deploys `ingress-nginx` which binds to that IP and routes `<ip>.nip.io` to the app.
 - **task-manager Helm release:** Gated by the `deploy_app` variable so first-time bootstrap can run before any image is pushed (see **§ 4**).
+- **arc-runner-set (ARC):** Self-hosted GitHub runner-set deployed via Helm into the cluster — this is what the `Infra CD` pipeline targets via `runs-on: arc-runner-set`. Without it the CD pipeline has nowhere to execute.
 
 ---
 
 ## 2. CI/CD Pipeline Architecture (GitFlow)
 
-We use GitHub Actions to automate the continuous integration and continuous deployment processes.
+We use GitHub Actions to automate the continuous integration and continuous deployment processes — two workflows chained via `workflow_run`:
 
-```mermaid
-flowchart TB
-    Dev["Developer"]
-    Dev -->|"push / merge PR"| Branch{"Target branch?"}
+![CI/CD pipeline](docs/cicd-pipeline.png)
 
-    Branch -->|"feature/*"| CI_FT["App CI: lint + test"]
-    Branch -->|"develop"| CI_Dev["App CI: lint + test + build<br/>→ AR task-manager-dev:sha + :latest"]
-    Branch -->|"main"| CI_Main["App CI: lint + test + build<br/>→ AR task-manager-prod:sha + :latest"]
+<sub>Source: [`docs/cicd-pipeline.html`](docs/cicd-pipeline.html) — open in a browser for the interactive version.</sub>
 
-    CI_FT -.->|"no deploy"| End1["stop"]
-
-    CI_Dev -->|"workflow_run success"| CD_Plan_Dev["Infra CD — plan (dev)"]
-    CI_Main -->|"workflow_run success"| CD_Plan_Prod["Infra CD — plan (prod)"]
-
-    CD_Plan_Dev --> CD_Apply_Dev["Infra CD — apply (dev)<br/>environment: dev (auto)"]
-    CD_Plan_Prod --> Gate{{"GitHub Environment: prod<br/>Required reviewers approve"}}
-    Gate -->|"approved"| CD_Apply_Prod["Infra CD — apply (prod)"]
-
-    CD_Apply_Dev --> LT_Dev["Locust load test"]
-    CD_Apply_Prod --> LT_Prod["Locust load test"]
-
-    classDef gate fill:#fff4cd,stroke:#b78103,stroke-width:2px,color:#000
-    class Gate gate
-```
+| Branch       | App CI                                           | Infra CD                                                                  |
+| ------------ | ------------------------------------------------ | ------------------------------------------------------------------------- |
+| `feature/*`  | lint + test                                      | — (no deploy)                                                             |
+| `develop`    | lint + test + build & push to `task-manager-dev` | `plan` → `apply` (env `dev`, auto) → Locust                               |
+| `main`       | lint + test + build & push to `task-manager-prod`| `plan` → manual approval (env `prod`) → `apply` → Locust                  |
 
 ### Pipelines breakdown
 - **App CI (`app-ci.yml`)** — runs `golangci-lint` and `go test -race` on every push. On `develop` or `main`, it also builds a Docker image and pushes two tags to the environment-matching Artifact Registry repo: `:<sha>` (immutable) and `:latest`.
